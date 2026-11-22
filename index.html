@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru" translate="no">
+<head>
+<meta charset="utf-8">
+<meta name="google" content="notranslate">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Тренажёр по дробям 5 класса: разведка, карта тем, объяснения по ступеням, проверка на следующий день.">
+<meta name="theme-color" content="#0A84AD">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Дроби">
+<title>Математика без потолка</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&amp;family=Unbounded:wght@600;700&amp;display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<main id="app" class="app"></main>
+<noscript><p style="padding:16px">Для работы приложения нужен JavaScript.</p></noscript>
+<script src="frac.js"></script>
+<script src="content.js"></script>
+<script src="content2.js"></script>
+<script src="content3.js"></script>
+<script src="engine.js"></script>
+<script src="ui.js"></script>
+<script>
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+  }
+</script>
+</body>
+</html>
