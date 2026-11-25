@@ -1,6 +1,6 @@
 /* Сначала сеть, без сети - сохранённая копия. Так обновления приходят сразу, а без интернета приложение открывается. */
-const CACHE = 'mbp-v2';
-const FILES = ['./', './index.html', './app.css', './frac.js', './content.js', './content2.js', './content3.js', './engine.js', './ui.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
+const CACHE = 'mbp-v3';
+const FILES = ['./', './index.html', './app.css', './frac.js', './rat.js', './content.js', './content2.js', './content3.js', './content6a.js', './content6b.js', './grades.js', './engine.js', './ui.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); }));
 });

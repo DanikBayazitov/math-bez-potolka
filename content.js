@@ -1724,10 +1724,17 @@
       q = gens[gi](ctx || {});
     } finally { Math.random = old; }
     q.topic = topicId; q.step = step; q.gi = gi; q.seed = seed;
+    if (t.grade >= 6) markRat(q);
     const whole = !!t.mixedInput || step === 6;
-    if (q.kind === 'fraction' && (whole || q.answer.n > q.answer.d || q.form.mixed)) q.withWhole = true;
-    if (q.kind === 'steps') q.steps.forEach(function (s) { if (s.kind === 'fraction' && (whole || s.answer.n > s.answer.d || (s.form && s.form.mixed))) s.withWhole = true; });
+    if (q.kind === 'fraction' && (whole || Math.abs(q.answer.n) > q.answer.d || q.form.mixed)) q.withWhole = true;
+    if (q.kind === 'steps') q.steps.forEach(function (s) { if (s.kind === 'fraction' && (whole || Math.abs(s.answer.n) > s.answer.d || (s.form && s.form.mixed))) s.withWhole = true; });
     return q;
+  }
+  // в 6 классе ответ может быть со знаком минус и с запятой
+  function markRat(s) {
+    if (s.kind === 'number') { s.neg = true; s.dec = true; }
+    else if (s.kind === 'fraction') s.neg = true;
+    else if (s.kind === 'steps') s.steps.forEach(markRat);
   }
   // объяснение ступени с учётом интересов
   function explainFor(topicId, step, ctx) {

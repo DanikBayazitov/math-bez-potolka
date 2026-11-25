@@ -148,6 +148,9 @@
       .replace(/\s<\s/g, ' меньше ')
       .replace(/\(ост\.\s*(\d+)\)/g, ', остаток $1')
       .replace(/км\/ч/g, 'километров в час')
+      .replace(/(\d+),(\d*)\((\d+)\)/g, function (m, w, pre, per) { return w + ' целых ' + (pre ? pre + ' и ' : '') + per + ' в периоде'; })
+      .replace(/\|([^|]+)\|/g, ' модуль $1 ')
+      .replace(/−(?=[\d(])/g, 'минус ')
       .replace(/ - /g, ', ');
   }
 
@@ -272,14 +275,28 @@
   /* ---------- проверка ответа ---------- */
   function empty(v) { return v === undefined || v === null || String(v).trim() === ''; }
   function parseNum(s) {
-    s = String(s === undefined || s === null ? '' : s).trim();
+    s = String(s === undefined || s === null ? '' : s).trim().replace(/^[−–]/, '-');
     if (!/^-?\d{1,7}$/.test(s)) return null;
     return parseInt(s, 10);
   }
+  // десятичная запись: -2,5 или 2.5 -> Frac
+  function parseDec(s) {
+    s = String(s === undefined || s === null ? '' : s).trim().replace(/^[−–]/, '-').replace('.', ',');
+    const m = s.match(/^(-?)(\d{1,7})(?:,(\d{1,6}))?$/);
+    if (!m) return null;
+    const frac = m[3] || '', den = Math.pow(10, frac.length);
+    const n = parseInt(m[2], 10) * den + (frac ? parseInt(frac, 10) : 0);
+    return new Frac(m[1] ? -n : n, den).red();
+  }
   function checkAnswer(spec, input) {
     if (spec.kind === 'number') {
+      if (spec.dec || (spec.answer && typeof spec.answer === 'object')) {
+        const fv = parseDec(input);
+        if (fv === null) return { ok: false, invalid: true, msg: 'Введи число. Дробную часть пиши после запятой.' };
+        return { ok: fv.eq(F(spec.answer)) };
+      }
       const v = parseNum(input);
-      if (v === null) return { ok: false, invalid: true, msg: 'Введи число цифрами.' };
+      if (v === null) return { ok: false, invalid: true, msg: String(input || '').indexOf(',') >= 0 ? 'Здесь ответ без запятой.' : 'Введи число цифрами.' };
       return { ok: v === spec.answer };
     }
     if (spec.kind === 'yesno' || spec.kind === 'choice') return { ok: input === spec.answer };
@@ -300,6 +317,8 @@
       if (d === 0) return { ok: false, invalid: true, msg: 'Знаменатель не может быть нулём.' };
       val = F(w * d + n, d);
     }
+    const neg = inp.s === '-' || inp.s === '−';
+    if (neg) val = val.mul(-1);
     const exp = F(spec.answer);
     if (!val.eq(exp)) return { ok: false };
     const form = spec.form || {};
@@ -310,7 +329,7 @@
     if (form.improper && hasW) return { ok: false, partial: true, msg: 'Величина верная. Запиши ответ без целой части.' };
     let note = '';
     if (!form.den && !form.improper) {
-      const canon = mk(val.red(), true);
+      const canon = mk(neg ? val.mul(-1).red() : val.red(), true);
       const given = nE ? String(w) : (hasW ? mx(w, n, d) : fr(n, d));
       if (canon !== given) note = 'Можно записать короче: ' + canon + '.';
     }
@@ -323,6 +342,6 @@
     numWords: numWords, ordFem: ordFem, ordGen: ordGen, fracWords: fracWords, speech: speech,
     svgBar: svgBar, svgRows: svgRows, svgCircle: svgCircle, svgCircles: svgCircles, svgGrid: svgGrid, svgRay: svgRay,
     qChoice: qChoice, qSign: qSign, qNum: qNum, qFrac: qFrac, qYes: qYes, qSteps: qSteps,
-    sNum: sNum, sFrac: sFrac, sSign: sSign, checkAnswer: checkAnswer, parseNum: parseNum
+    sNum: sNum, sFrac: sFrac, sSign: sSign, checkAnswer: checkAnswer, parseNum: parseNum, parseDec: parseDec
   });
 })();

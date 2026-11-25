@@ -94,7 +94,7 @@
 
   /* ---------- первый вход ---------- */
   function vStart() {
-    const tiles = [['Математика', 'Дроби 5 класса', true], ['Физика', 'скоро', false], ['Русский язык', 'скоро', false], ['Информатика', 'скоро', false]];
+    const tiles = [['Математика', '5 и 6 класс', true], ['Физика', 'скоро', false], ['Русский язык', 'скоро', false], ['Информатика', 'скоро', false]];
     return bar({ title: 'Математика без потолка' }) +
       say('Привет! Что будем учить?') +
       '<div class="tiles">' + tiles.map(function (t) {
@@ -106,11 +106,11 @@
   }
   function vGrade() {
     return bar({ left: backBtn('start'), title: 'О себе' }) + say('Ты в каком классе?') +
-      '<div class="grades">' + [5, 6, 7, 8, 9].map(function (g) {
+      '<div class="grades">' + [5, 6, 7, 8, 9, 10, 11].map(function (g) {
         return g <= 6 ? '<button class="btn btn-secondary big" data-act="grade" data-g="' + g + '">' + g + '</button>'
           : '<button class="btn btn-fog big" disabled>' + g + '<small>скоро</small></button>';
       }).join('') + '</div>' +
-      '<p class="tip">Класс не ограничивает темы. Он помогает найти точку старта.</p>';
+      '<p class="tip">Темы идут по программе твоего класса. Не хватает основы? Приложение само вернёт к нужной теме младшего класса.</p>';
   }
   function vInterests() {
     const sel = U.onb.interests;
@@ -140,7 +140,7 @@
   }
 
   /* ---------- задача ---------- */
-  function blankInp() { return { v: '', w: '', n: '', d: '' }; }
+  function blankInp() { return { v: '', w: '', n: '', d: '', s: '' }; }
   function firstBox(spec) { return spec.kind === 'fraction' ? 'n' : 'v'; }
   function curSpec() { const q = U.card.q; return q.kind === 'steps' ? q.steps[U.att.sub] : q; }
   function startAttempt() {
@@ -150,14 +150,14 @@
   }
   function curSpec0(q) { return q.kind === 'steps' ? q.steps[0] : q; }
   function answerText(spec) {
-    if (spec.kind === 'number') return String(spec.answer);
+    if (spec.kind === 'number') return typeof spec.answer === 'object' ? M.rk(spec.answer, { dec: true }) : (spec.answer < 0 ? M.MINUS + (-spec.answer) : String(spec.answer));
     if (spec.kind === 'yesno') return spec.answer ? 'Да' : 'Нет';
     if (spec.kind === 'choice') return spec.options[spec.answer];
     if (spec.kind === 'fraction') {
-      const f = M.F(spec.answer), form = spec.form || {};
-      if (form.den) return M.fr(f.n * form.den / f.d, form.den);
-      if (form.improper) return M.mk(f.red(), false);
-      return M.mk(f.red(), true);
+      const f0 = M.F(spec.answer), sg = f0.n < 0 ? M.MINUS : '', f = M.absF(f0), form = spec.form || {};
+      if (form.den) return sg + M.fr(f.n * form.den / f.d, form.den);
+      if (form.improper) return sg + M.mk(f.red(), false);
+      return sg + M.mk(f.red(), true);
     }
     return '';
   }
@@ -248,13 +248,14 @@
       }).join('') + '</div>';
     }
     let h = '<div class="ans-row">';
+    if (spec.neg) h += '<span class="sgn' + (a.inp.s ? ' on' : '') + '" aria-label="' + (a.inp.s ? 'Знак минус' : 'Без знака') + '">' + (a.inp.s ? M.MINUS : '') + '</span>';
     if (spec.kind === 'number') h += box('v', dis);
     else {
       h += '<div class="fin">' + (spec.withWhole ? '<div class="fin-w">' + box('w', dis) + '<span class="cap">целая часть</span></div>' : '') +
         '<div class="fin-f">' + box('n', dis) + '<i class="fin-bar"></i>' + box('d', dis) + '</div></div>';
     }
     h += '</div>';
-    if (!dis) h += keypad(spec.kind === 'fraction');
+    if (!dis) h += keypad(spec.kind === 'fraction', spec);
     return h;
   }
   function box(k, dis) {
@@ -263,12 +264,17 @@
     return '<button class="box b-' + k + (a.focus === k && !dis ? ' focus' : '') + '" data-act="focus" data-box="' + k + '"' + (dis ? ' disabled' : '') + ' aria-label="' + name + (v ? ': ' + esc(v) : '') + '">' +
       (v ? esc(v) : '<span class="ph">' + (k === 'w' ? '' : '?') + '</span>') + '</button>';
   }
-  function keypad(frac) {
+  function keypad(frac, spec) {
     let h = '<div class="pad" role="group" aria-label="Цифры">';
     ['1', '2', '3', '4', '5', '6', '7', '8', '9'].forEach(function (k) { h += '<button class="key" data-act="key" data-k="' + k + '">' + k + '</button>'; });
     h += '<button class="key fn" data-act="key" data-k="del" aria-label="Стереть">' + IC.del + '</button>';
     h += '<button class="key" data-act="key" data-k="0">0</button>';
     h += frac ? '<button class="key fn" data-act="key" data-k="tab" aria-label="Следующее окошко">' + IC.arrow + '</button>' : '<span></span>';
+    if (spec && (spec.neg || spec.dec)) {
+      h += spec.neg ? '<button class="key fn sign-key" data-act="key" data-k="neg" aria-label="Знак минус">' + M.MINUS + '</button>' : '<span></span>';
+      h += spec.dec && !frac ? '<button class="key fn" data-act="key" data-k="comma" aria-label="Запятая">,</button>' : '<span></span>';
+      h += '<span></span>';
+    }
     return h + '</div><button class="btn btn-primary" data-act="check">Проверить</button>';
   }
   function vMsg() {
@@ -427,7 +433,7 @@
   function vAllDone() {
     let h = bar({ left: mapBtn(), title: 'Всё пройдено', right: menuBtn() }) + say('Все темы на карте светятся. Новые земли скоро появятся.');
     h += '<section class="card"><p>Пока можно идти глубже. Там задачи выше уровня класса.</p><div class="stack">' +
-      M.TOPICS.filter(function (t) { return t.deep.length; }).map(function (t) { return '<button class="btn btn-secondary" data-act="deep" data-id="' + t.id + '">' + IC.star + ' ' + esc(t.short) + '</button>'; }).join('') + '</div></section>';
+      E.scope(U.st).filter(function (t) { return t.deep.length; }).map(function (t) { return '<button class="btn btn-secondary" data-act="deep" data-id="' + t.id + '">' + IC.star + ' ' + esc(t.short) + '</button>'; }).join('') + '</div></section>';
     return h;
   }
 
@@ -447,8 +453,8 @@
   }
   function dueCheck() { const td = today(); return M.TOPICS.find(function (t) { const s = U.st.topics[t.id]; return s && s.status === 'today' && s.due && s.due <= td; }); }
   function vMap() {
-    const st = U.st, l = st.learner, td = today(), cur = E.currentTopic(st);
-    const items = M.TOPICS.map(function (t) { return { t: t, state: nodeState(t.id, cur, td) }; }).concat(M.FUTURE.map(function (n) { return { fog: n }; }));
+    const st = U.st, l = st.learner, td = today(), cur = E.currentTopic(st), gi = M.gradeInfo(E.gradeOf(l));
+    const items = E.scope(st).map(function (t) { return { t: t, state: nodeState(t.id, cur, td) }; }).concat(gi.future.map(function (n) { return { fog: n }; }));
     const X = [50, 76, 50, 24], STEP = 124, TOP = 44, HGT = TOP + (items.length - 1) * STEP + 96;
     const pts = items.map(function (it, i) { return [X[i % 4], TOP + i * STEP]; });
     function seg(upto) {
@@ -462,7 +468,7 @@
     let greet = 'Привет, ' + l.nick + '! Продолжим?';
     if (check) greet = 'Привет, ' + l.nick + '! Сегодня начнём с проверки темы «' + check.short + '».';
     else if (!cur) greet = 'Привет, ' + l.nick + '! Все темы светятся. Выбирай тему и иди глубже.';
-    let h = bar({ left: '<span class="nick">' + esc(l.nick) + '</span>', title: 'Карта дробей', right: menuBtn() });
+    let h = bar({ left: '<span class="nick">' + esc(l.nick) + '</span>', title: gi.map, right: menuBtn() });
     h += say(greet);
     if (!LS_OK) h += '<div class="msg note">Этот браузер не сохраняет прогресс. Открой ссылку в обычном окне Chrome или Safari.</div>';
     const lastExp = st.settings.lastExport || '';
@@ -483,6 +489,7 @@
         '<span class="disc">' + ring + inner + '</span><span class="nlabel">' + esc(t.short) + '<small>' + nodeLabel(it.state, t.id, td) + '</small></span></button>';
     });
     h += '</div>';
+    if (cur && T(cur).grade !== E.gradeOf(l)) h = h.replace('<div class="map"', '<div class="msg note">Сейчас повторяем основу из ' + T(cur).grade + ' класса: «' + esc(T(cur).short) + '». Потом вернёмся к своей теме.</div><div class="map"');
     const label = check ? 'Начать проверку' : cur ? 'Продолжить: ' + T(cur).short : 'Глубже';
     h += '<div class="dock"><button class="btn btn-primary" data-act="' + (cur || check ? 'continue' : 'all-done') + '">' + esc(label) + ' ' + IC.arrow + '</button></div>';
     return h;
@@ -598,7 +605,7 @@
     const known = rows.filter(function (r) { return r.status === 'known'; }).length, work = rows.filter(function (r) { return r.status === 'learning'; }).length;
     let min = 0; E.days(data).forEach(function (d) { min += d.min; });
     let h = '<div class="kpis">' + kpi(closed + ' из ' + rows.length, 'тем закрыто') + kpi(known, 'знакомы по разведке') + kpi(work, 'в работе') + kpi(min ? E.fmtMin(min) : '0 мин', 'время занятий') + '</div>';
-    h += chart(E.series(data));
+    h += chart(E.series(data), data);
     h += '<div class="trows">' + rows.map(function (r) {
       const w = Math.round(100 * r.score / 50);
       return '<div class="trow"><div class="tr-top"><span class="tchip">' + r.n + '</span><div class="tr-name"><div>' + esc(r.title) + '</div>' +
@@ -611,10 +618,11 @@
     return h;
   }
   function dayNum(k) { const p = k.split('-').map(Number); return Date.UTC(p[0], p[1] - 1, p[2]) / 86400000; }
-  function chart(series) {
-    const title = '<h3>Заполнение карты по дням</h3><p class="muted small">Сумма баллов по 12 темам в процентах от максимума. Баллы растут только от верных ответов.</p>';
+  function chart(series, data) {
+    const nT = E.scope({ learner: data.learner }).length;
+    const title = '<h3>Заполнение карты по дням</h3><p class="muted small">Сумма баллов по ' + nT + ' ' + plural(nT, ['теме', 'темам', 'темам']) + ' своего класса в процентах от максимума. Баллы растут только от верных ответов.</p>';
     if (series.length < 2) return title + '<div class="chart-empty">График появится после второго дня занятий.</div>';
-    const W = 640, Hh = 220, L = 44, R = 56, Tp = 16, B = 30, max = E.maxTotal();
+    const W = 640, Hh = 220, L = 44, R = 56, Tp = 16, B = 30, max = E.maxTotal(data);
     const d0 = dayNum(series[0].date), d1 = dayNum(series[series.length - 1].date), span = Math.max(1, d1 - d0);
     const pts = series.map(function (p) {
       const v = Math.round(100 * p.total / max);
@@ -704,7 +712,9 @@
     let h = '<p>Здесь все объяснения и примеры задач. Отметьте проверенные ступени. Замечания можно скопировать и прислать для правки.</p>' +
       '<p class="small">Проверено ступеней: ' + reviewed + ' из ' + (M.TOPICS.length * 5) + '.</p>' +
       '<button class="btn btn-secondary" data-act="copy-notes">' + IC.copy + ' Скопировать замечания</button>';
+    let lastG = 0;
     M.TOPICS.forEach(function (t) {
+      if (t.grade !== lastG) { lastG = t.grade; h += '<h3>' + lastG + ' класс</h3>'; }
       const open = !!U.ad.open[t.id];
       h += '<details class="ct" data-tid="' + t.id + '"' + (open ? ' open' : '') + '><summary><span class="tchip">' + t.n + '</span><span>' + esc(t.title) + '<span class="muted small"> · ' + t.codes.join(', ') + '</span></span></summary>';
       if (open) {
@@ -758,7 +768,7 @@
       '<p>' + (LS_OK ? 'Этот браузер сохраняет прогресс.' : 'Этот браузер не сохраняет прогресс. Откройте ссылку в обычном окне Chrome или Safari.') + '</p>' +
       '<p class="muted">Очистка данных браузера стирает прогресс. Поэтому раз в неделю нужен код для учителя.</p>' +
       (U.st.learner ? '<h3>Сброс</h3><button class="btn btn-danger" data-act="wipe">Удалить прогресс ученика на этом телефоне</button>' : '') +
-      '<p class="muted small">Версия 1. Темы: дроби 5 класса, 12 тем по КТП.</p>';
+      '<p class="muted small">Версия 2. ' + [5, 6].map(function (g) { const n = M.topicsOf(g).length; return M.gradeInfo(g).about + ': ' + n + ' ' + plural(n, ['тема', 'темы', 'тем']); }).join('. ') + '.</p>';
   }
 
   /* ---------- переходы ---------- */
@@ -809,10 +819,17 @@
       const order = spec.withWhole ? ['w', 'n', 'd'] : ['n', 'd'];
       const i = order.indexOf(a.focus);
       a.focus = order[(i + (k === 'tab' ? 1 : order.length - 1)) % order.length];
+    } else if (k === 'neg') {
+      if (!spec.neg) return;
+      a.inp.s = a.inp.s ? '' : '-';
+    } else if (k === 'comma') {
+      if (spec.kind !== 'number' || !spec.dec) return;
+      const cur = a.inp.v || '';
+      if (cur.indexOf(',') < 0 && cur.length < 9) a.inp.v = (cur || '0') + ',';
     } else if (k === 'del') {
       a.inp[a.focus] = (a.inp[a.focus] || '').slice(0, -1);
     } else {
-      const max = spec.kind === 'number' ? 7 : 4, cur = a.inp[a.focus] || '';
+      const cur = a.inp[a.focus] || '', max = spec.kind === 'number' ? (cur.indexOf(',') >= 0 ? 10 : 7) : 4;
       if (cur.length < max) a.inp[a.focus] = (cur === '0' ? '' : cur) + k;
     }
     if (a.msg && a.msg.type === 'note') a.msg = null;
@@ -820,6 +837,8 @@
   }
   function renderBoxes() {
     const a = U.att;
+    const sg = root.querySelector('.sgn');
+    if (sg) { sg.textContent = a.inp.s ? M.MINUS : ''; sg.classList.toggle('on', !!a.inp.s); sg.setAttribute('aria-label', a.inp.s ? 'Знак минус' : 'Без знака'); }
     root.querySelectorAll('.box').forEach(function (el) {
       const k = el.dataset.box, v = a.inp[k] || '';
       el.innerHTML = v ? esc(v) : '<span class="ph">' + (k === 'w' ? '' : '?') + '</span>';
@@ -854,7 +873,7 @@
     focus: function (el) { if (U.att && !U.att.done) { U.att.focus = el.dataset.box; renderBoxes(); } },
     check: function () {
       const a = U.att, spec = curSpec();
-      submit(spec.kind === 'number' ? a.inp.v : { w: a.inp.w, n: a.inp.n, d: a.inp.d });
+      submit(spec.kind === 'number' ? (a.inp.v ? (a.inp.s ? '-' : '') + a.inp.v : '') : { w: a.inp.w, n: a.inp.n, d: a.inp.d, s: a.inp.s });
     },
     opt: function (el) { submit(Number(el.dataset.i)); },
     yn: function (el) { submit(el.dataset.v === '1'); },
@@ -962,7 +981,7 @@
     'copy-notes': function () {
       const lines = [];
       M.TOPICS.forEach(function (t) {
-        for (let s = 1; s <= 5; s++) { const n = U.st.notes[t.id + ':' + s]; if (n && n.note && n.note.trim()) lines.push('Тема ' + t.n + ' «' + t.title + '», ступень ' + s + ' «' + t.steps[s - 1].title + '»: ' + n.note.trim()); }
+        for (let s = 1; s <= 5; s++) { const n = U.st.notes[t.id + ':' + s]; if (n && n.note && n.note.trim()) lines.push(t.grade + ' класс. Тема ' + t.n + ' «' + t.title + '». Ступень ' + s + ' «' + t.steps[s - 1].title + '»: ' + n.note.trim()); }
       });
       if (!lines.length) { toast('Замечаний пока нет'); return; }
       copyText(lines.join('\n'), null);
@@ -1115,6 +1134,8 @@
       else if (e.key === 'Backspace') { e.preventDefault(); typeKey('del'); }
       else if (e.key === 'Enter') { e.preventDefault(); ACT.check(); }
       else if (spec.kind === 'fraction' && (e.key === '/' || e.key === 'ArrowRight' || e.key === ' ')) { e.preventDefault(); typeKey('tab'); }
+      else if (spec.neg && (e.key === '-' || e.key === '−')) { e.preventDefault(); typeKey('neg'); }
+      else if (spec.dec && (e.key === ',' || e.key === '.')) { e.preventDefault(); typeKey('comma'); }
       else if (spec.kind === 'fraction' && e.key === 'ArrowLeft') { e.preventDefault(); typeKey('back-tab'); }
     } else if (spec.kind === 'choice' && /^[1-4]$/.test(e.key)) {
       const i = Number(e.key) - 1;

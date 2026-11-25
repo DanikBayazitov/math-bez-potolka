@@ -15,6 +15,11 @@
   const IDX = {}; TOPS.forEach(function (t, i) { IDX[t.id] = i; });
 
   function T(id) { return TOPS[IDX[id]]; }
+  // программа класса: темы своего класса по порядку КТП
+  function gradeOf(learner) { return learner && learner.grade >= 6 ? 6 : 5; }
+  function scopeOf(learner) { return M.topicsOf(gradeOf(learner)); }
+  function scope(st) { return scopeOf(st.learner); }
+  function sIdx(S, id) { for (let i = 0; i < S.length; i++) if (S[i].id === id) return i; return -1; }
   function title(id) { return T(id).title; }
   function short(id) { return T(id).short; }
   const ANC = {};
@@ -116,14 +121,19 @@
   }
 
   function avail(st, id) {
-    return T(id).prereq.every(function (p) { const x = st.topics[p]; return !!x && ['today', 'closed', 'known'].indexOf(x.status) >= 0; });
+    const g = T(id).grade || 5;
+    return T(id).prereq.every(function (p) {
+      if ((T(p).grade || 5) !== g) return true;   // база из младшего класса проверяется на ходу, а не закрывает тему
+      const x = st.topics[p]; return !!x && ['today', 'closed', 'known'].indexOf(x.status) >= 0;
+    });
   }
   E.avail = function (st, id) { return avail(st, id); };
   function currentTopic(st) {
     if (st.current) { const s = st.topics[st.current]; if (s && (s.status === 'learning' || s.status === 'new')) return st.current; }
     let id = null;
-    for (let i = 0; i < N && !id; i++) { const s = st.topics[TOPS[i].id]; if (s && s.status === 'learning') id = TOPS[i].id; }
-    for (let i = 0; i < N && !id; i++) { const s = ts(st, TOPS[i].id); if (s.status === 'new' && avail(st, TOPS[i].id)) id = TOPS[i].id; }
+    const S = scope(st);
+    for (let i = 0; i < S.length && !id; i++) { const s = st.topics[S[i].id]; if (s && s.status === 'learning') id = S[i].id; }
+    for (let i = 0; i < S.length && !id; i++) { const s = ts(st, S[i].id); if (s.status === 'new' && avail(st, S[i].id)) id = S[i].id; }
     st.current = id;
     return id;
   }
@@ -545,43 +555,46 @@
   E.clearQueue = function (st) { const f = fl(st); f.queue = f.queue.filter(function (x) { return x.type === 'closed'; }); };
 
   /* ---------- разведка ---------- */
-  function ktpIndex(today, grade) {
-    if (grade >= 6) return N - 1;
+  function ktpIndex(today, S) {
     let idx = 0;
-    TOPS.forEach(function (t, i) { if (t.dates && sy(t.dates[0]) <= sy(today)) idx = i; });
+    S.forEach(function (t, i) { if (t.dates && sy(t.dates[0]) <= sy(today)) idx = i; });
     return idx;
+  }
+  function newDiag(learner, now) {
+    const S = scopeOf(learner);
+    return { date: dkey(now), n: 0, lo: -1, hi: S.length, first: ktpIndex(dkey(now), S), pr: {}, done: false, g: gradeOf(learner) };
   }
   E.onboard = function (st, p, now) {
     st.learner = { id: 'L' + now.toString(36) + Math.floor(Math.random() * 1e6).toString(36), nick: p.nick, grade: p.grade, g: p.g,
       interests: p.interests.slice(0, 3), created: now, lang: 'ru' };
     E.touch(st, now);
-    st.diag = { date: dkey(now), n: 0, lo: -1, hi: N, first: ktpIndex(dkey(now), p.grade), pr: {}, done: false };
+    st.diag = newDiag(st.learner, now);
     ev(st, 'Начало: ник «' + p.nick + '», ' + p.grade + ' класс');
     E.save(st);
   };
-  function mainStep(i) { return TOPS[i].diag[0] + 1; }
-  function covered(d) {
+  function mainStep(S, i) { return S[i].diag[0] + 1; }
+  function covered(d, S) {
     const out = new Set();
     Object.keys(d.pr).forEach(function (k) {
       const i = Number(k);
-      if (d.pr[i].some(function (p) { return p.ok && p.k === 'main'; })) {
+      if (S[i] && d.pr[i].some(function (p) { return p.ok && p.k === 'main'; })) {
         out.add(i);
-        ancestors(TOPS[i].id).forEach(function (a) { out.add(IDX[a]); });
+        ancestors(S[i].id).forEach(function (a) { const j = sIdx(S, a); if (j >= 0) out.add(j); });
       }
     });
     return out;
   }
-  function diagPick(d) {
+  function diagPick(d, S) {
     const probed = function (i) { return !!(d.pr[i] && d.pr[i].length); };
     if (d.n === 0) return { i: d.first, k: 'main' };
     if (d.hi - d.lo > 1) return { i: d.lo + Math.ceil((d.hi - d.lo) / 2), k: 'main' };
-    const cov = covered(d);
+    const cov = covered(d, S);
     // 1) темы ниже границы, которые не следуют из верных ответов по карте
     for (let i = d.hi - 1; i >= 0; i--) if (!probed(i) && !cov.has(i)) return { i: i, k: 'main' };
     // 2) уточнить ступень старта у первой непонятой темы
     let first = null;
-    for (let i = 0; i < N && first === null; i++) if (!cov.has(i)) first = i;
-    if (first !== null && probed(first) && d.pr[first].length === 1 && !d.pr[first][0].ok && mainStep(first) > 1) return { i: first, k: 'easy' };
+    for (let i = 0; i < S.length && first === null; i++) if (!cov.has(i)) first = i;
+    if (first !== null && probed(first) && d.pr[first].length === 1 && !d.pr[first][0].ok && mainStep(S, first) > 1) return { i: first, k: 'easy' };
     // 3) подтвердить самую высокую тему, выведенную по карте
     for (let i = d.hi - 1; i >= 0; i--) if (!probed(i) && cov.has(i)) return { i: i, k: 'main' };
     return null;
@@ -589,9 +602,9 @@
   E.diagNext = function (st) {
     const d = st.diag;
     if (!d || d.done || d.n >= DIAG_MAX) return null;
-    const p = diagPick(d);
+    const S = scope(st), p = diagPick(d, S);
     if (!p) return null;
-    const t = TOPS[p.i], step = p.k === 'main' ? mainStep(p.i) : Math.max(1, mainStep(p.i) - 1);
+    const t = S[p.i], step = p.k === 'main' ? mainStep(S, p.i) : Math.max(1, mainStep(S, p.i) - 1);
     let card = mat(st, { type: 'task', mode: 'd', topic: t.id, step: step, gi: p.k === 'main' ? t.diag[1] : undefined });
     // в разведке без задач по шагам: одна задача - один ответ
     for (let g = 0; card.q.kind === 'steps' && g < t.steps[step - 1].gens.length; g++) card = mat(st, { type: 'task', mode: 'd', topic: t.id, step: step, gi: g });
@@ -599,7 +612,7 @@
     return card;
   };
   function diagAnswer(st, card, out, now) {
-    const d = st.diag, i = IDX[card.topic], ok = out.res === 2;
+    const d = st.diag, i = sIdx(scope(st), card.topic), ok = out.res === 2;
     (d.pr[i] = d.pr[i] || []).push({ s: card.step, ok: ok, k: card.kind, dk: out.res === -1 });
     d.n++;
     if (card.kind === 'main' && d.hi - d.lo > 1) { if (ok) d.lo = Math.max(d.lo, i); else d.hi = Math.min(d.hi, i); }
@@ -607,9 +620,9 @@
     if (!ok) addGap(st, card, 'diag', dkey(now));
   }
   E.diagFinish = function (st, now) {
-    const d = st.diag, today = dkey(now), cov = covered(d);
+    const d = st.diag, today = dkey(now), S = scope(st), cov = covered(d, S);
     const wrong = [];
-    TOPS.forEach(function (t, i) {
+    S.forEach(function (t, i) {
       const s = ts(st, t.id), pr = d.pr[i] || [];
       const past = !!t.dates && sy(t.dates[1]) < sy(today);
       let res, th, start = 1;
@@ -630,9 +643,9 @@
     });
     // темы над ошибкой получают минус
     wrong.forEach(function (w) {
-      TOPS.forEach(function (t) { if (ancestors(t.id).has(w)) { const s = ts(st, t.id); if (s.status === 'new') s.th = Math.min(s.th, -2); } });
+      S.forEach(function (t) { if (ancestors(t.id).has(w)) { const s = ts(st, t.id); if (s.status === 'new') s.th = Math.min(s.th, -2); } });
     });
-    TOPS.forEach(function (t) { (st.hist[today] = st.hist[today] || {})[t.id] = score(ts(st, t.id).th); });
+    S.forEach(function (t) { (st.hist[today] = st.hist[today] || {})[t.id] = score(ts(st, t.id).th); });
     d.done = true; d.end = now;
     st.current = null;
     const cur = currentTopic(st);
@@ -647,7 +660,14 @@
     const b = newState();
     Object.keys(b).forEach(function (k) { if (st[k] === undefined) st[k] = b[k]; });
     Object.keys(b.settings).forEach(function (k) { if (st.settings[k] === undefined) st.settings[k] = b.settings[k]; });
-    Object.keys(st.topics).forEach(function (id) { const x = blank(); Object.keys(x).forEach(function (k) { if (st.topics[id][k] === undefined) st.topics[id][k] = x[k]; }); });
+    Object.keys(st.topics).forEach(function (id) {
+      if (!T(id)) { delete st.topics[id]; return; }
+      const x = blank(); Object.keys(x).forEach(function (k) { if (st.topics[id][k] === undefined) st.topics[id][k] = x[k]; });
+    });
+    if (st.learner && st.diag && gradeOf(st.learner) === 6 && st.diag.g !== 6) {
+      st.diag = newDiag(st.learner, Date.now());
+      st.current = null; st.stack = [];
+    }
     return st;
   }
   E.load = function () {
@@ -731,14 +751,24 @@
   E.labels = { STATUS: STATUS, DIAGL: DIAGL, SRC: SRC, RES: RES, MODE: MODE };
   E.score = score; E.zone = zone; E.dkey = dkey; E.ddmm = ddmm; E.addDays = addDays;
 
+  // темы ученика: программа его класса и темы младшего класса, по которым он занимался
+  function dataTopics(data) {
+    const S = scopeOf(data.learner), seen = {};
+    S.forEach(function (t) { seen[t.id] = 1; });
+    const extra = TOPS.filter(function (t) { const x = data.topics && data.topics[t.id]; return !seen[t.id] && x && x.status !== 'new' && x.last; });
+    return extra.concat(S);
+  }
+  E.dataTopics = dataTopics;
+  E.scope = function (st) { return scope(st); };
+  E.gradeOf = gradeOf;
   E.topicRows = function (data, now) {
     const today = dkey(now);
-    return TOPS.map(function (t) {
+    return dataTopics(data).map(function (t) {
       const s = tsr(data, t.id), sc = score(s.th);
       let st = STATUS[s.status];
       if (s.status === 'learning') st += ', ступень ' + s.step + (s.ctl ? ' (контроль)' : '');
       if (s.status === 'today') st = 'закрыта ' + ddmm(s.closed) + ', проверка ' + (s.due <= today ? 'на ближайшем занятии' : ddmm(s.due));
-      return { id: t.id, n: t.n, title: t.title, codes: t.codes, lessons: t.lessons, dates: t.dates, status: s.status, label: st, score: sc, zone: zone(sc),
+      return { id: t.id, n: t.n, grade: t.grade || 5, title: t.title, codes: t.codes, lessons: t.lessons, dates: t.dates, status: s.status, label: st, score: sc, zone: zone(sc),
         diag: DIAGL[s.diag] || '', last: s.last, deep: s.deep, deepN: s.deepN, passed: s.passed.filter(Boolean).length,
         review: s.rdue && (s.status === 'closed' || s.status === 'known') ? s.rdue : '' };
     });
@@ -780,11 +810,11 @@
     const keys = Object.keys(data.hist || {}).sort(), last = {};
     return keys.map(function (k) {
       Object.keys(data.hist[k]).forEach(function (id) { last[id] = data.hist[k][id]; });
-      let sum = 0; TOPS.forEach(function (t) { sum += last[t.id] || 0; });
+      let sum = 0; scopeOf(data.learner).forEach(function (t) { sum += last[t.id] || 0; });
       return { date: k, total: sum };
     });
   };
-  E.maxTotal = function () { return 50 * N; };
+  E.maxTotal = function (data) { return 50 * scopeOf(data && data.learner).length; };
   function pct(a, b) { return b ? Math.round(100 * a / b) + '%' : '-'; }
   E.report = function (data, fromKey, toKey, now) {
     const l = data.learner || {}, lines = [];
@@ -817,5 +847,5 @@
   };
 
   // для тестов
-  E._ = { DIFF: DIFF, P: P, ktpIndex: ktpIndex, covered: covered, fl: fl, ts: ts, sy: sy, IDX: IDX };
+  E._ = { DIFF: DIFF, P: P, ktpIndex: ktpIndex, covered: covered, fl: fl, ts: ts, sy: sy, IDX: IDX, migrate: migrate };
 })();
