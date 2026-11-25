@@ -153,6 +153,7 @@
     if (spec.kind === 'number') return typeof spec.answer === 'object' ? M.rk(spec.answer, { dec: true }) : (spec.answer < 0 ? M.MINUS + (-spec.answer) : String(spec.answer));
     if (spec.kind === 'yesno') return spec.answer ? 'Да' : 'Нет';
     if (spec.kind === 'choice') return spec.options[spec.answer];
+    if (spec.kind === 'expr') return M.prettyExpr(spec.answer);
     if (spec.kind === 'fraction') {
       const f0 = M.F(spec.answer), sg = f0.n < 0 ? M.MINUS : '', f = M.absF(f0), form = spec.form || {};
       if (form.den) return sg + M.fr(f.n * form.den / f.d, form.den);
@@ -247,6 +248,7 @@
         return '<button class="opt' + (right ? ' right' : '') + '" data-act="yn" data-v="' + p[0] + '"' + (off ? ' disabled' : '') + '>' + (right ? IC.check : '') + '<span>' + p[1] + '</span></button>';
       }).join('') + '</div>';
     }
+    if (spec.kind === 'expr') return '<div class="ans-row">' + exprBox(dis) + '</div>' + (dis ? '' : exprPad(spec));
     let h = '<div class="ans-row">';
     if (spec.neg) h += '<span class="sgn' + (a.inp.s ? ' on' : '') + '" aria-label="' + (a.inp.s ? 'Знак минус' : 'Без знака') + '">' + (a.inp.s ? M.MINUS : '') + '</span>';
     if (spec.kind === 'number') h += box('v', dis);
@@ -263,6 +265,61 @@
     const name = { v: 'Ответ', w: 'Целая часть', n: 'Числитель', d: 'Знаменатель' }[k];
     return '<button class="box b-' + k + (a.focus === k && !dis ? ' focus' : '') + '" data-act="focus" data-box="' + k + '"' + (dis ? ' disabled' : '') + ' aria-label="' + name + (v ? ': ' + esc(v) : '') + '">' +
       (v ? esc(v) : '<span class="ph">' + (k === 'w' ? '' : '?') + '</span>') + '</button>';
+  }
+  // выражение с буквами: 8a − 5
+  function exprHTML(v) {
+    let out = '';
+    for (let i = 0; i < v.length; i++) {
+      const ch = v[i];
+      if (ch === '+' || ch === '-') out += i === 0 ? (ch === '-' ? M.MINUS : '+') : ' ' + (ch === '-' ? M.MINUS : '+') + ' ';
+      else if (/[a-z]/.test(ch)) out += '<i class="v">' + ch + '</i>';
+      else out += esc(ch);
+    }
+    return out;
+  }
+  function exprBox(dis) {
+    const v = U.att.inp.v || '';
+    return '<button class="box b-expr' + (dis ? '' : ' focus') + '" data-act="focus" data-box="v"' + (dis ? ' disabled' : '') + ' aria-label="Ответ' + (v ? ': ' + esc(M.speech(M.prettyExpr(v))) : '') + '">' +
+      (v ? '<span class="ex">' + exprHTML(v) + '</span>' : '<span class="ph">?</span>') + '</button>';
+  }
+  function exprPad(spec) {
+    const vars = (spec.vars && spec.vars.length ? spec.vars : ['x']).slice(0, 3);
+    const k = function (key, label, cls, aria) { return '<button class="key' + (cls ? ' ' + cls : '') + '" data-act="key" data-k="' + key + '"' + (aria ? ' aria-label="' + aria + '"' : '') + '>' + label + '</button>'; };
+    const vk = function (i) { return vars[i] ? k('v-' + vars[i], '<i class="v">' + vars[i] + '</i>', 'fn var-key', 'Буква ' + vars[i]) : '<span></span>'; };
+    let h = '<div class="pad expr" role="group" aria-label="Цифры, буквы и знаки">';
+    h += k('1', '1') + k('2', '2') + k('3', '3') + k('plus', '+', 'fn sign-key', 'Плюс');
+    h += k('4', '4') + k('5', '5') + k('6', '6') + k('minus', M.MINUS, 'fn sign-key', 'Минус');
+    h += k('7', '7') + k('8', '8') + k('9', '9') + vk(0);
+    h += k('del', IC.del, 'fn', 'Стереть') + k('0', '0') + k('comma', ',', 'fn', 'Запятая') + vk(1);
+    if (vars.length > 2) h += vk(2) + '<span></span><span></span><span></span>';
+    return h + '</div><button class="btn btn-primary" data-act="check">Проверить</button>';
+  }
+  // набор выражения: цифры, запятая, буквы, плюс и минус
+  function typeExpr(k, spec) {
+    const a = U.att, cur = a.inp.v || '', last = cur.slice(-1);
+    const isOp = function (ch) { return ch === '+' || ch === '-'; }, isVar = function (ch) { return /[a-z]/.test(ch); };
+    const numTok = (cur.match(/[\d,]*$/) || [''])[0];
+    let v = cur;
+    if (k === 'del') v = cur.slice(0, -1);
+    else if (/^\d$/.test(k)) {
+      if (isVar(last) || numTok.replace(',', '').length >= 7) return;
+      v = numTok === '0' ? cur.slice(0, -1) + k : cur + k;
+    } else if (k === 'comma') {
+      if (isVar(last) || numTok.indexOf(',') >= 0) return;
+      v = /\d$/.test(last) ? cur + ',' : cur + '0,';
+    } else if (k === 'plus' || k === 'minus') {
+      const op = k === 'plus' ? '+' : '-';
+      if (last === ',') return;
+      if (!cur) { if (op === '+') return; v = '-'; }
+      else if (isOp(last)) v = cur.length === 1 && op === '+' ? '' : cur.slice(0, -1) + op;
+      else v = cur + op;
+    } else if (k.indexOf('v-') === 0) {
+      const L = k.slice(2);
+      if ((spec.vars || []).indexOf(L) < 0 || isVar(last) || last === ',') return;
+      v = cur + L;
+    } else return;
+    if (v.length > 28) return;
+    a.inp.v = v;
   }
   function keypad(frac, spec) {
     let h = '<div class="pad" role="group" aria-label="Цифры">';
@@ -768,7 +825,7 @@
       '<p>' + (LS_OK ? 'Этот браузер сохраняет прогресс.' : 'Этот браузер не сохраняет прогресс. Откройте ссылку в обычном окне Chrome или Safari.') + '</p>' +
       '<p class="muted">Очистка данных браузера стирает прогресс. Поэтому раз в неделю нужен код для учителя.</p>' +
       (U.st.learner ? '<h3>Сброс</h3><button class="btn btn-danger" data-act="wipe">Удалить прогресс ученика на этом телефоне</button>' : '') +
-      '<p class="muted small">Версия 2. ' + [5, 6].map(function (g) { const n = M.topicsOf(g).length; return M.gradeInfo(g).about + ': ' + n + ' ' + plural(n, ['тема', 'темы', 'тем']); }).join('. ') + '.</p>';
+      '<p class="muted small">Версия 3. ' + [5, 6].map(function (g) { const n = M.topicsOf(g).length; return M.gradeInfo(g).about + ': ' + n + ' ' + plural(n, ['тема', 'темы', 'тем']); }).join('. ') + '.</p>';
   }
 
   /* ---------- переходы ---------- */
@@ -814,6 +871,12 @@
     const a = U.att;
     if (!a || a.done || a.specDone) return;
     const spec = curSpec();
+    if (spec.kind === 'expr') {
+      typeExpr(k, spec);
+      if (a.msg && a.msg.type === 'note') a.msg = null;
+      renderBoxes();
+      return;
+    }
     if (k === 'tab' || k === 'back-tab') {
       if (spec.kind !== 'fraction') return;
       const order = spec.withWhole ? ['w', 'n', 'd'] : ['n', 'd'];
@@ -841,6 +904,11 @@
     if (sg) { sg.textContent = a.inp.s ? M.MINUS : ''; sg.classList.toggle('on', !!a.inp.s); sg.setAttribute('aria-label', a.inp.s ? 'Знак минус' : 'Без знака'); }
     root.querySelectorAll('.box').forEach(function (el) {
       const k = el.dataset.box, v = a.inp[k] || '';
+      if (el.classList.contains('b-expr')) {
+        el.innerHTML = v ? '<span class="ex">' + exprHTML(v) + '</span>' : '<span class="ph">?</span>';
+        el.setAttribute('aria-label', 'Ответ' + (v ? ': ' + M.speech(M.prettyExpr(v)) : ''));
+        return;
+      }
       el.innerHTML = v ? esc(v) : '<span class="ph">' + (k === 'w' ? '' : '?') + '</span>';
       el.classList.toggle('focus', a.focus === k);
     });
@@ -873,6 +941,7 @@
     focus: function (el) { if (U.att && !U.att.done) { U.att.focus = el.dataset.box; renderBoxes(); } },
     check: function () {
       const a = U.att, spec = curSpec();
+      if (spec.kind === 'expr') { submit(a.inp.v || ''); return; }
       submit(spec.kind === 'number' ? (a.inp.v ? (a.inp.s ? '-' : '') + a.inp.v : '') : { w: a.inp.w, n: a.inp.n, d: a.inp.d, s: a.inp.s });
     },
     opt: function (el) { submit(Number(el.dataset.i)); },
@@ -1129,6 +1198,18 @@
     const a = U.att;
     if (a.done) { if (e.key === 'Enter') { e.preventDefault(); nextCard(); } return; }
     const spec = curSpec();
+    if (spec.kind === 'expr') {
+      const RU = { 'ф': 'a', 'и': 'b', 'с': 'c', 'в': 'd', 'л': 'k', 'ь': 'm', 'т': 'n', 'з': 'p', 'ы': 's', 'е': 't', 'м': 'v', 'ч': 'x', 'н': 'y', 'я': 'z', 'а': 'a', 'х': 'x', 'у': 'y' };
+      const key = e.key.length === 1 ? (RU[e.key.toLowerCase()] || e.key.toLowerCase()) : e.key;
+      if (/^\d$/.test(key)) { e.preventDefault(); typeKey(key); }
+      else if (key === 'Backspace') { e.preventDefault(); typeKey('del'); }
+      else if (key === 'Enter') { e.preventDefault(); ACT.check(); }
+      else if (key === '+' || key === '=') { e.preventDefault(); typeKey('plus'); }
+      else if (key === '-' || key === '−' || key === '_') { e.preventDefault(); typeKey('minus'); }
+      else if (key === ',' || key === '.' || key === 'б' || key === 'ю') { e.preventDefault(); typeKey('comma'); }
+      else if (/^[a-z]$/.test(key) && (spec.vars || []).indexOf(key) >= 0) { e.preventDefault(); typeKey('v-' + key); }
+      return;
+    }
     if (spec.kind === 'number' || spec.kind === 'fraction') {
       if (/^\d$/.test(e.key)) { e.preventDefault(); typeKey(e.key); }
       else if (e.key === 'Backspace') { e.preventDefault(); typeKey('del'); }

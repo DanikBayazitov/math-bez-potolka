@@ -200,6 +200,23 @@ p { margin: 0; }
 .fin-f { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .fin-bar { display: block; width: 100%; min-width: 86px; height: 3px; border-radius: 2px; background: var(--ink); }
 .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.pad.expr { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.key.var-key { font: italic 700 28px/1 Georgia, 'Times New Roman', serif; }
+i.v { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-weight: 600; padding: 0 0.04em; }
+.box.b-expr { min-width: 200px; max-width: 100%; padding: 0 14px; font-size: 28px; white-space: nowrap; overflow: hidden; text-overflow: clip; display: flex; align-items: center; justify-content: center; }
+.box.b-expr i.v { font-size: 1.08em; }
+.vtab { border-collapse: collapse; margin: 4px auto; font: 700 18px/1.2 var(--font-body); font-variant-numeric: tabular-nums; }
+.vtab th, .vtab td { border: 1.5px solid #B9D3E2; padding: 7px 10px; text-align: center; min-width: 38px; }
+.vtab th { background: var(--accent-soft); color: var(--ink); }
+.vtab td.q { color: var(--accent-ink); }
+.tiles .cell { stroke: #CFE0EC; stroke-width: 1; }
+.tiles .tv { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.tiles .tvn { fill: #fff; stroke: #E4572E; stroke-width: 2; }
+.tiles .tu { fill: var(--sun); stroke: var(--sun-deep); stroke-width: 1.5; }
+.tiles .tun { fill: #fff; stroke: #E4572E; stroke-width: 1.5; }
+.tiles .tun-m { stroke: #E4572E; stroke-width: 2; }
+.tiles .tl { font: italic 600 17px Georgia, 'Times New Roman', serif; fill: var(--ink); }
+.tiles .ts { font: 800 20px var(--font-body); fill: var(--ink); }
 .key { min-height: 56px; border-radius: 14px; border: 0; background: var(--accent-soft); font: 800 24px var(--font-body); color: var(--ink); display: grid; place-items: center; }
 .key:active { background: #CDE7F0; }
 .key.fn { color: var(--accent-ink); }

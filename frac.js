@@ -64,13 +64,18 @@
   }
   // текст с разметкой -> HTML
   function toHTML(text) {
-    return esc(text).replace(/\{([^{}]+)\}/g, function (m, inner) {
+    const html = esc(text).replace(/\{([^{}]+)\}/g, function (m, inner) {
       const sp = inner.trim().match(/^(\S+)\s+([^\s/]+)\/([^\s/]+)$/);
       if (sp) return '<span class="mixed"><span class="whole">' + sp[1] + '</span>' + fracHTML(sp[2], sp[3]) + '</span>';
       const p = inner.split('/');
       if (p.length === 2) return fracHTML(p[0], p[1]);
       return m;
     });
+    // буква-переменная (одна латинская буква) курсивом; внутри тегов не трогаем
+    if (!/[a-z]/.test(text)) return html;
+    return html.split(/(<[^>]*>)/).map(function (part) {
+      return part.charAt(0) === '<' ? part : part.replace(/(^|[^A-Za-z&])([a-z]{1,3})(?![A-Za-z;])/g, '$1<i class="v">$2</i>');
+    }).join('');
   }
 
   /* ---------- склонение ---------- */
@@ -150,9 +155,12 @@
       .replace(/км\/ч/g, 'километров в час')
       .replace(/(\d+),(\d*)\((\d+)\)/g, function (m, w, pre, per) { return w + ' целых ' + (pre ? pre + ' и ' : '') + per + ' в периоде'; })
       .replace(/\|([^|]+)\|/g, ' модуль $1 ')
-      .replace(/−(?=[\d(])/g, 'минус ')
-      .replace(/ - /g, ', ');
+      .replace(/−(?=[\d(a-z])/g, 'минус ')
+      .replace(/ - /g, ', ')
+      .replace(/(^|[^A-Za-z])([a-z]{1,3})(?![A-Za-z])/g, function (m, p, w) { return p + ' ' + w.split('').map(function (l) { return LETTER[l] || l; }).join(' ') + ' '; });
   }
+  // как читать букву-переменную
+  const LETTER = { a: 'а', b: 'бэ', c: 'цэ', d: 'дэ', k: 'ка', m: 'эм', n: 'эн', p: 'пэ', s: 'эс', t: 'тэ', v: 'вэ', x: 'икс', y: 'игрек', z: 'зэт' };
 
   /* ---------- рисунки (SVG; цвета задаются классами в CSS) ---------- */
   function cls(i, k, k2) { return i < k ? 'sa' : i < k + k2 ? 'sb' : 'se'; }
@@ -301,6 +309,7 @@
     }
     if (spec.kind === 'yesno' || spec.kind === 'choice') return { ok: input === spec.answer };
     if (spec.kind === 'fraction') return checkFrac(spec, input || {});
+    if (spec.kind === 'expr' && M.checkExpr) return M.checkExpr(spec, input);
     return { ok: false };
   }
   function checkFrac(spec, inp) {
