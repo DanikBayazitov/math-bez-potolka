@@ -9,6 +9,8 @@
       future: ['Совместная работа', 'Десятичные дроби', 'Множества', 'Проценты', 'Углы', 'Диаграммы'] },
     math6: { subj: 'math', n: 6, title: '6 класс', map: 'Карта 6 класса', course: 'Курс 6 класса', about: 'Математика 6 класса: рациональные числа и выражения по КТП',
       future: ['Уравнения', 'Неравенства', 'Координатная плоскость', 'Статистика', 'Графики', 'Системы уравнений'] },
+    phys7: { subj: 'phys', n: 7, title: '7 класс', map: 'Физика. Карта 7 класса', course: 'Физика 7 класса', about: 'Физика 7 класса: взаимодействие тел по КТП',
+      future: ['Давление', 'Работа и мощность', 'Энергия', 'Простые механизмы', 'Земля и космос'] },
     phys8: { subj: 'phys', n: 8, title: '8 класс', map: 'Физика. Карта 8 класса', course: 'Физика 8 класса', about: 'Физика 8 класса: основы электростатики по КТП',
       future: ['Постоянный ток', 'Электромагнитные явления', 'Световые явления'] },
     phys9: { subj: 'phys', n: 9, title: '9 класс', map: 'Физика. Карта 9 класса', course: 'Физика 9 класса', about: 'Физика 9 класса: основы динамики по КТП',
@@ -17,7 +19,7 @@
   // классы по предметам: какие уже есть в приложении
   const SUBJ = {
     math: { title: 'Математика', grades: [5, 6], all: [5, 6, 7, 8, 9, 10, 11] },
-    phys: { title: 'Физика', grades: [8, 9], all: [7, 8, 9] }
+    phys: { title: 'Физика', grades: [7, 8, 9], all: [7, 8, 9] }
   };
   function cKey(g, subj) {
     subj = subj || 'math';
@@ -44,6 +46,9 @@
       { id: '6.2А', title: 'Действия над рациональными числами', topics: ['r-mul', 'r-mulprop', 'r-div', 'r-period', 'r-ops', 'r-word'], full: true },
       { id: '6.2В', title: 'Алгебраические выражения', topics: ['a-expr', 'a-dom', 'a-brack', 'a-like', 'a-ident', 'a-trans', 'a-make', 'a-solve'], full: true }
     ],
+    phys7: [
+      { id: '7.2.2', title: 'Взаимодействие тел', topics: ['f-inertia', 'f-force', 'f-gravity', 'f-hooke', 'f-friction', 'f-sum'], full: true }
+    ],
     phys8: [
       { id: '8.4.1', title: 'Основы электростатики', topics: ['e-charge', 'e-conserve', 'e-coulomb', 'e-field', 'e-potential', 'e-lines', 'e-capacitor'], full: true }
     ],
@@ -52,7 +57,7 @@
     ]
   };
   // часов в году по КТП: от них считается процент курса
-  const HOURS = { math5: 170, math6: 170, phys8: 68, phys9: 68 };
+  const HOURS = { math5: 170, math6: 170, phys7: 68, phys8: 68, phys9: 68 };
   const CH_OF = {}, WEIGHT = {};
   // уроки темы: '59-62, 65-66' -> [59, 60, 61, 62, 65, 66]
   function lessonList(t) {

@@ -224,6 +224,45 @@
     return svg(320, 204, aria || 'Бросок горизонтально', b);
   }
 
-  M.P = { sup: sup, sci: sci, num: num, svgCharges: svgCharges, svgInduction: svgInduction, svgRub: svgRub, svgLines: svgLines, svgForce: svgForce, svgCapacitor: svgCapacitor,
+  /* ---------- рисунки на бумаге в клетку (7 класс) ---------- */
+  function grid(cols, rows, C) {
+    let b = '';
+    for (let i = 0; i <= cols; i++) b += '<line class="ph-grid" x1="' + i * C + '" y1="0" x2="' + i * C + '" y2="' + rows * C + '"/>';
+    for (let j = 0; j <= rows; j++) b += '<line class="ph-grid" x1="0" y1="' + j * C + '" x2="' + cols * C + '" y2="' + j * C + '"/>';
+    return b;
+  }
+  // стрелки сил в клетках: rows [{ at: клетка начала, n: длина в клетках, d: 'right'|'left', l: 'F₁' }]
+  function svgGridArrows(rows, aria) {
+    const C = 16, cols = 20, H = rows.length * 3 + 1;
+    let b = grid(cols, H, C);
+    rows.forEach(function (r, i) {
+      const y = (i * 3 + 2) * C, x1 = r.at * C, x2 = (r.at + (r.d === 'left' ? -r.n : r.n)) * C;
+      b += '<circle class="ph-pt" cx="' + x1 + '" cy="' + y + '" r="4"/>' + arrow(x1, y, x2, y, 'ph-force');
+      b += '<text class="ph-lbl" x="' + ((x1 + x2) / 2) + '" y="' + (y - 7) + '" text-anchor="middle">' + M.esc(r.l || 'F') + '</text>';
+    });
+    return svg(cols * C, H * C, aria || 'Силы на бумаге в клетку', b);
+  }
+  // график F(Δl) для пружины на бумаге в клетку: 1 клетка по оси Δl = 1 см, по оси F = s Н
+  // точка (x0 см; F0 Н) отмечена пунктиром
+  function svgHooke(s, x0, aria) {
+    const C = 16, L = 3, cols = 16, rows = 13, ox = L * C, oy = 11 * C;
+    let b = grid(cols, rows, C);
+    b += '<line class="ph-axis" x1="' + ox + '" y1="' + oy + '" x2="' + (ox + 12 * C) + '" y2="' + oy + '"/><line class="ph-axis" x1="' + ox + '" y1="' + oy + '" x2="' + ox + '" y2="' + C + '"/>';
+    b += '<polygon class="ph-axis-h" points="' + (ox + 12 * C + 6) + ',' + oy + ' ' + (ox + 12 * C - 3) + ',' + (oy - 4) + ' ' + (ox + 12 * C - 3) + ',' + (oy + 4) + '"/>';
+    b += '<polygon class="ph-axis-h" points="' + ox + ',' + (C - 6) + ' ' + (ox - 4) + ',' + (C + 3) + ' ' + (ox + 4) + ',' + (C + 3) + '"/>';
+    for (let i = 2; i <= 10; i += 2) {
+      b += '<text class="ph-tick" x="' + (ox + i * C) + '" y="' + (oy + 14) + '" text-anchor="middle">' + i + '</text>';
+      b += '<text class="ph-tick" x="' + (ox - 4) + '" y="' + (oy - i * C + 4) + '" text-anchor="end">' + M.rk(F(s).mul(i), { dec: true }) + '</text>';
+    }
+    b += '<text class="ph-tick" x="' + (ox - 4) + '" y="' + (oy + 14) + '" text-anchor="end">0</text>';
+    b += '<text class="ph-lbl" x="' + (ox + 12 * C) + '" y="' + (oy + 30) + '" text-anchor="end">Δl, см</text><text class="ph-lbl" x="' + (ox + 6) + '" y="' + (C - 2) + '">F, Н</text>';
+    b += '<line class="ph-gline" x1="' + ox + '" y1="' + oy + '" x2="' + (ox + 10 * C) + '" y2="' + (oy - 10 * C) + '"/>';
+    const px = ox + x0 * C, py = oy - x0 * C;
+    b += '<line class="ph-dash" x1="' + px + '" y1="' + py + '" x2="' + px + '" y2="' + oy + '"/><line class="ph-dash" x1="' + px + '" y1="' + py + '" x2="' + ox + '" y2="' + py + '"/>';
+    b += '<circle class="ph-pt" cx="' + px + '" cy="' + py + '" r="4.5"/>';
+    return svg(cols * C, rows * C + 18, aria || 'График силы упругости', b);
+  }
+
+  M.P = { svgGridArrows: svgGridArrows, svgHooke: svgHooke, sup: sup, sci: sci, num: num, svgCharges: svgCharges, svgInduction: svgInduction, svgRub: svgRub, svgLines: svgLines, svgForce: svgForce, svgCapacitor: svgCapacitor,
     svgBox: svgBox, svgSpring: svgSpring, svgMasses: svgMasses, svgPair: svgPair, svgOrbit: svgOrbit, svgThrow: svgThrow };
 })();

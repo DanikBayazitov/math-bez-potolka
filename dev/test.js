@@ -10,7 +10,7 @@ require(path.join(APP, 'content.js'));
 require(path.join(APP, 'content2.js'));
 require(path.join(APP, 'content3.js'));
 require(path.join(APP, 'content6a.js'));
-['content6b.js', 'content6c.js', 'content6d.js', 'content_p8.js', 'content_p9.js'].forEach(function (f) { if (require('fs').existsSync(path.join(APP, f))) require(path.join(APP, f)); });
+['content6b.js', 'content6c.js', 'content6d.js', 'content_p7.js', 'content_p8.js', 'content_p9.js'].forEach(function (f) { if (require('fs').existsSync(path.join(APP, f))) require(path.join(APP, f)); });
 require(path.join(APP, 'grades.js'));
 require(path.join(APP, 'engine.js'));
 const M = globalThis.M, E = M.E;
@@ -390,6 +390,26 @@ ok(Object.values(wst.topics).some(s => s.status !== 'new'), 'weak progresses');
   E.onboard(st9, { nick: 'Д', grade: 9, g: 'f', interests: [], subj: 'phys' }, now9);
   const c0 = E.next(st9, now9);
   ok(c0.type === 'task' && c0.topic === 'd-newton3', 'physics 9 diag starts from the KTP topic of the date: ' + c0.topic);
+  // 7 класс: глава «Взаимодействие тел»
+  const p7 = M.topicsOf(7, 'phys');
+  ok(p7.length === 6 && p7.every(t => t.subj === 'phys' && t.grade === 7), 'physics 7: 6 topics');
+  ok(M.chaptersOf(7, 'phys').length === 1 && M.chaptersOf(7, 'phys')[0].id === '7.2.2', 'physics 7: one chapter');
+  const s7 = sim({ subj: 'phys', grade: 7, max: 3000, perDay: 60, answer: () => 2 });
+  ok(s7.done && Object.keys(s7.st.topics).every(id => M.topicById(id).grade === 7 && M.topicById(id).subj === 'phys'), 'physics 7 strong finishes inside grade 7, steps=' + s7.steps);
+  ok(s7.st.ch['7.2.2'] && s7.st.ch['7.2.2'].pass, 'physics 7 chapter test passed');
+  const c7 = E.course(s7.st);
+  ok(c7.total === 68 && c7.pct === 12, 'physics 7 course percent 8 of 68 lessons: ' + JSON.stringify(c7));
+  console.log('phys7 strong:', s7.steps, 'steps', JSON.stringify(s7.seen));
+  const ab7 = {};
+  const l7 = sim({ subj: 'phys', grade: 7, max: 6000, perDay: 45, simpler: 0.03, deep: 0.2, prac: 0.2, answer: function (card) {
+    const t = card.topic; ab7[t] = ab7[t] === undefined ? -1.2 : ab7[t] + 0.12;
+    const b = card.step === 6 ? 3 : E._.DIFF[card.step - 1];
+    const p = 1 / (1 + Math.exp(b - ab7[t])), x = Math.random();
+    return x < p ? 2 : x < p + (1 - p) * 0.6 ? 1 : 0;
+  } });
+  const closed7 = p7.filter(t => l7.st.topics[t.id] && ['closed', 'today'].indexOf(l7.st.topics[t.id].status) >= 0).length;
+  console.log('phys7 learner:', l7.steps, 'steps, done=' + l7.done, 'closed', closed7);
+  ok(l7.done || closed7 >= 4, 'physics 7 learner progresses');
   // математика и физика хранятся отдельно
   ok(E._.keyOf ? E._.keyOf('phys') !== E._.keyOf('math') : true, 'separate storage keys');
 })();

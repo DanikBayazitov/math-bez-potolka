@@ -456,3 +456,9 @@ i.v { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-w
 .phys .ph-sat { fill: #E4572E; }
 .phys .ph-cliff { fill: #E8EEF3; stroke: #5B7083; stroke-width: 2; }
 .phys .ph-path { fill: none; stroke: var(--accent-ink); stroke-width: 2; stroke-dasharray: 5 4; }
+.phys .ph-grid { stroke: var(--line); stroke-width: 1; }
+.phys .ph-axis { stroke: var(--ink); stroke-width: 2; }
+.phys .ph-axis-h { fill: var(--ink); }
+.phys .ph-tick { font: 600 12px var(--font-body); fill: var(--muted); }
+.phys .ph-gline { stroke: var(--accent); stroke-width: 2.5; }
+.phys .ph-dash { stroke: #E4572E; stroke-width: 1.5; stroke-dasharray: 4 3; }

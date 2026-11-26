@@ -1,13 +1,14 @@
 """Физика в браузере: выбор предмета, вход, разведка, все темы главы, тест по главе и процент курса.
 В конце переход в математику: прогресс по физике остаётся на месте.
-Класс задаётся переменной GRADE: 8 (по умолчанию) или 9."""
+Класс задаётся переменной GRADE: 7, 8 (по умолчанию) или 9."""
 import os, sys, time, subprocess, json
 from playwright.sync_api import sync_playwright
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'smoke6.py')).read().split('with sync_playwright() as p:')[0].replace("PORT = 8771", "PORT = 8777"))
 shots = {}
 GRADE = os.environ.get('GRADE', '8')
-CH = {'8': '8.4.1', '9': '9.2.2'}[GRADE]
-WANT = {'8': {'ex_e-charge_1', 'ex_e-charge_3', 'ex_e-coulomb_1', 'ex_e-field_4', 'ex_e-lines_1', 'ex_e-lines_4', 'ex_e-capacitor_1'},
+CH = {'7': '7.2.2', '8': '8.4.1', '9': '9.2.2'}[GRADE]
+WANT = {'7': {'ex_f-force_3', 'ex_f-force_4', 'ex_f-gravity_1', 'ex_f-hooke_2', 'ex_f-hooke_4', 'ex_f-friction_1', 'ex_f-sum_2', 'ex_f-sum_3'},
+        '8': {'ex_e-charge_1', 'ex_e-charge_3', 'ex_e-coulomb_1', 'ex_e-field_4', 'ex_e-lines_1', 'ex_e-lines_4', 'ex_e-capacitor_1'},
         '9': {'ex_d-newton1_4', 'ex_d-forces_2', 'ex_d-forces_3', 'ex_d-newton2_3', 'ex_d-newton3_1', 'ex_d-gravity_1', 'ex_d-weight_2', 'ex_d-gravmotion_3', 'ex_d-satellite_1'}}[GRADE]
 P = 'p%s_' % GRADE
 log = []
