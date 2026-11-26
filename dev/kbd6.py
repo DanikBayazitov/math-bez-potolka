@@ -16,7 +16,7 @@ with sync_playwright() as p:
     pg.reload(); pg.wait_for_timeout(500)
     pg.click('[data-act="continue"]'); pg.wait_for_timeout(200)
     # объяснения пропускаем до первой задачи с выражением
-    for i in range(40):
+    for i in range(160):
         info = pg.evaluate(INFO)
         if info and info['inp']['kind'] == 'expr': break
         if info: answer(pg, info); pg.wait_for_timeout(80); nb = pg.query_selector('#next-btn'); nb and nb.click(); pg.wait_for_timeout(100); continue

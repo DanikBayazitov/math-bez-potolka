@@ -51,7 +51,7 @@
   /* ---------- состояние ---------- */
   function newState() {
     return {
-      v: 1, cv: M.CONTENT_VERSION, learner: null, diag: null, topics: {}, current: null, stack: [], gaps: [],
+      v: 1, cv: M.CONTENT_VERSION, learner: null, diag: null, topics: {}, ch: {}, current: null, stack: [], gaps: [],
       sessions: [], log: [], hist: {}, seq: 0,
       settings: { pin: '', sessionMin: 25, audio: true }, notes: {}, students: {}
     };
@@ -114,14 +114,15 @@
     }
     f.lastGi[key] = gi;
     card.q = M.makeQuestion(card.topic, card.step, ctx(st), gi, card.seed);
-    card.hints = 'dcnb'.indexOf(card.mode) < 0;     // подсказки разрешены
-    card.once = 'dcnb'.indexOf(card.mode) >= 0;     // одна попытка
-    card.dk = card.mode === 'd';                    // кнопка «Не знаю»
+    card.hints = 'dcnbt'.indexOf(card.mode) < 0;    // подсказки разрешены
+    card.once = 'dcnbt'.indexOf(card.mode) >= 0;    // одна попытка
+    card.dk = card.mode === 'd' || card.mode === 't'; // кнопка «Не знаю»
     return card;
   }
 
   function avail(st, id) {
     const g = T(id).grade || 5;
+    if (!chOpen(st, id)) return false;
     return T(id).prereq.every(function (p) {
       if ((T(p).grade || 5) !== g) return true;   // база из младшего класса проверяется на ходу, а не закрывает тему
       const x = st.topics[p]; return !!x && ['today', 'closed', 'known'].indexOf(x.status) >= 0;
@@ -129,10 +130,10 @@
   }
   E.avail = function (st, id) { return avail(st, id); };
   function currentTopic(st) {
-    if (st.current) { const s = st.topics[st.current]; if (s && (s.status === 'learning' || s.status === 'new')) return st.current; }
+    if (st.current) { const s = st.topics[st.current]; if (s && (s.status === 'learning' || s.status === 'new') && chOpen(st, st.current)) return st.current; }
     let id = null;
     const S = scope(st);
-    for (let i = 0; i < S.length && !id; i++) { const s = st.topics[S[i].id]; if (s && s.status === 'learning') id = S[i].id; }
+    for (let i = 0; i < S.length && !id; i++) { const s = st.topics[S[i].id]; if (s && s.status === 'learning' && chOpen(st, S[i].id)) id = S[i].id; }
     for (let i = 0; i < S.length && !id; i++) { const s = ts(st, S[i].id); if (s.status === 'new' && avail(st, S[i].id)) id = S[i].id; }
     st.current = id;
     return id;
@@ -154,6 +155,8 @@
     if (f.queue.length) return mat(st, f.queue.shift());
     const c = checkCard(st, today);
     if (c) return c;
+    const tc = testCard(st);
+    if (tc) return tc;
     if (f.since >= 4 && !f.prac && !f.deep) { const r = reviewCard(st, today); if (r) { f.since = 0; return r; } }
     if (f.prac) {
       if (f.prac.left > 0) {
@@ -171,6 +174,10 @@
       const d = f.deep; f.deep = null;
       return { type: 'info', kind: 'deep-done', topic: d.topic, toMap: true, text: 'Глубже: решено ' + d.ok + ' из ' + d.n + '. Хорошая работа головой.' };
     }
+    const fx = fixCard(st);
+    if (fx) return fx;
+    const due = dueChapter(st);
+    if (due) return startTest(st, due, now);
     const id = currentTopic(st);
     if (!id) { const r = reviewCard(st, today); return r || { type: 'done' }; }
     const s = ts(st, id);
@@ -202,6 +209,8 @@
       case 'x': upd(st, card.topic, 6, y, K_LEARN, now); deepAnswer(st, card, out); break;
       case 'p': upd(st, card.topic, card.step, y, K_LEARN, now); if (out.res <= 0) addGap(st, card, 'prac', dkey(now)); break;
       case 'z': upd(st, card.topic, card.step, y, K_EASY, now); break;
+      case 't': upd(st, card.topic, card.step, y, K_LEARN, now); testAnswer(st, card, out, now); break;
+      case 'f': upd(st, card.topic, card.step, y, K_LEARN, now); fixAnswer(st, card, out, now); break;
     }
     if (f.prac && (card.mode === 'p' || card.prac)) { f.prac.left--; f.prac.n++; if (out.res >= 1) f.prac.ok++; }
     if (card.mode !== 'd') {
@@ -318,6 +327,14 @@
     const s = ts(st, card.topic), f = fl(st), lvl = card.lvl || 0;
     st.log.push([Math.round(now / 1000), card.topic, card.step, choice === 'ok' ? 'u' : 's', lvl, 0, 0, 0, -1, 0]);
     let result = 'ok';
+    if (card.fix) {
+      if (choice !== 'ok') {
+        if (lvl < M.maxLevel(card.topic, card.step)) { f.queue.unshift({ type: 'explain', topic: card.topic, step: card.step, lvl: lvl + 1, auto: true, fix: true }); result = 'simpler'; }
+        else result = 'again';
+      }
+      E.save(st);
+      return result;
+    }
     if (choice === 'ok') {
       if (!card.auto) s.explain = false;
     } else if (lvl < M.maxLevel(card.topic, card.step)) {
@@ -379,6 +396,183 @@
     if (back) ts(st, back).explain = true;
     f.queue.unshift({ type: 'closed', topic: id, back: back, deep: T(id).deep.length > 0 });
   }
+
+  /* ---------- главы: тест в конце главы и работа над ошибками ---------- */
+  const PASS = 0.9;
+  function chapters(st) { return M.chaptersOf(gradeOf(st.learner)); }
+  function chs(st, cid) {
+    if (!st.ch) st.ch = {};
+    return st.ch[cid] || (st.ch[cid] = { pass: '', best: 0, tries: 0, hist: [], test: null, fix: null });
+  }
+  function chById(st, cid) { return chapters(st).find(function (c) { return c.id === cid; }) || null; }
+  function chPassed(st, c) { return !c.full || !!(st.ch && st.ch[c.id] && st.ch[c.id].pass); }
+  function chDone(st, c) { return c.topics.every(function (id) { const x = st.topics[id]; return !!x && ['today', 'closed', 'known'].indexOf(x.status) >= 0; }); }
+  // тема открыта, только если все главы до её главы сданы
+  function chOpen(st, id) {
+    if (!st.learner) return true;
+    const C = chapters(st);
+    for (let i = 0; i < C.length; i++) {
+      if (C[i].topics.indexOf(id) >= 0) return true;
+      if (!chPassed(st, C[i])) return false;
+    }
+    return true;
+  }
+  E.topicOpen = function (st, id) { return chOpen(st, id); };
+  // какая несданная глава закрывает тему
+  E.blocker = function (st, id) {
+    const C = chapters(st);
+    for (let i = 0; i < C.length; i++) { if (C[i].topics.indexOf(id) >= 0) return null; if (!chPassed(st, C[i])) return C[i]; }
+    return null;
+  };
+  // первая несданная глава: тест нужен, когда все её темы пройдены
+  function dueChapter(st) {
+    const C = chapters(st);
+    for (let i = 0; i < C.length; i++) {
+      if (chPassed(st, C[i])) continue;
+      return chDone(st, C[i]) ? C[i] : null;
+    }
+    return null;
+  }
+  function testSize(c) { return Math.max(20, Math.min(30, 3 * c.topics.length)); }
+  // вопросы теста: поровну по темам главы, чаще поздние ступени, без задач по шагам
+  function buildTest(st, c) {
+    const n = testSize(c), per = c.topics.map(function () { return 0; }), qs = [];
+    for (let k = 0; k < n; k++) per[k % c.topics.length]++;
+    c.topics.forEach(function (id, j) {
+      const t = T(id), used = {};
+      for (let m = 0; m < per[j]; m++) {
+        let item = null;
+        for (let tries = 0; tries < 40 && !item; tries++) {
+          const step = M.pick([2, 3, 3, 4, 4, 5, 5]), gi = Math.floor(Math.random() * t.steps[step - 1].gens.length);
+          if (used[step + ':' + gi] && tries < 25) continue;
+          const seed = 1 + Math.floor(Math.random() * 2147483000), q = M.makeQuestion(id, step, ctx(st), gi, seed);
+          if (q.kind === 'steps' && tries < 35) continue;
+          used[step + ':' + gi] = 1;
+          item = { topic: id, step: step, gi: gi, seed: seed };
+        }
+        if (item) qs.push(item);
+      }
+    });
+    return { qs: M.shuffle(qs), i: 0, ok: 0, res: [] };
+  }
+  function startTest(st, c, now) {
+    const x = chs(st, c.id);
+    x.test = buildTest(st, c);
+    ev(st, 'Тест по главе «' + c.title + '»: начат, ' + M.pl(x.test.qs.length, ['вопрос', 'вопроса', 'вопросов']) + ', попытка ' + (x.tries + 1));
+    E.save(st);
+    const again = x.tries > 0;
+    return { type: 'info', kind: 'ctest-start', chapter: c.id,
+      text: (again ? 'Новый тест по главе «' + c.title + '». Задачи в нём другие. ' : 'Глава «' + c.title + '» пройдена. Теперь тест по главе. ') +
+        M.pl(x.test.qs.length, ['вопрос', 'вопроса', 'вопросов']) + '. Подсказок нет. Для перехода к следующей главе нужно 90% верных ответов.' };
+  }
+  function testCard(st) {
+    const C = chapters(st);
+    for (let i = 0; i < C.length; i++) {
+      const x = st.ch && st.ch[C[i].id], t = x && x.test;
+      if (!t || t.i >= t.qs.length) continue;
+      const q = t.qs[t.i];
+      return mat(st, { type: 'task', mode: 't', topic: q.topic, step: q.step, gi: q.gi, seed: q.seed, chapter: C[i].id, ti: t.i, tn: t.qs.length });
+    }
+    return null;
+  }
+  function testAnswer(st, card, out, now) {
+    const x = chs(st, card.chapter), t = x.test;
+    if (!t || t.i !== card.ti) return;
+    const ok = out.res === 2;
+    t.res.push(ok ? 1 : 0);
+    if (ok) t.ok++;
+    t.i++;
+    if (t.i >= t.qs.length) finishTest(st, card.chapter, now);
+  }
+  function finishTest(st, cid, now) {
+    const x = chs(st, cid), t = x.test, c = chById(st, cid), n = t.qs.length, pct = Math.round(100 * t.ok / n), f = fl(st);
+    const bad = {};
+    t.qs.forEach(function (q, i) { if (!t.res[i]) (bad[q.topic] = bad[q.topic] || []).push(q.step); });
+    const badN = {};
+    Object.keys(bad).forEach(function (id) { badN[id] = bad[id].length; });
+    x.tries++; x.best = Math.max(x.best, pct); x.test = null;
+    x.hist.push({ d: dkey(now), n: n, ok: t.ok, p: pct, bad: badN });
+    const pass = t.ok >= Math.ceil(PASS * n - 1e-9);
+    if (pass) {
+      x.pass = dkey(now); x.fix = null;
+      ev(st, 'Тест по главе «' + c.title + '»: ' + t.ok + ' из ' + n + ' (' + pct + '%), глава сдана');
+    } else {
+      // явные ошибки (2 и больше по теме): объяснение и 3 верных ответа подряд; одна ошибка: 2 подряд
+      // со второй неудачи тема с явными ошибками проходится заново со ступени первой ошибки
+      const items = [], again = [];
+      c.topics.forEach(function (id) {
+        if (!bad[id]) return;
+        const many = bad[id].length >= 2;
+        if (many && x.tries >= 2) { again.push(id); reopen(st, id, Math.min.apply(null, bad[id]), 'тест по главе не сдан второй раз'); return; }
+        bad[id].filter(function (v, i, a) { return a.indexOf(v) === i; }).sort().forEach(function (step) {
+          items.push({ topic: id, step: step, need: many ? 3 : 2, got: 0, fails: 0, lvl: 0, ex: many, shown: false });
+        });
+      });
+      x.fix = items.length ? { items: items, i: 0, again: again } : null;
+      ev(st, 'Тест по главе «' + c.title + '»: ' + t.ok + ' из ' + n + ' (' + pct + '%), работа над ошибками по ' + Object.keys(bad).length + ' ' + (Object.keys(bad).length === 1 ? 'теме' : 'темам'));
+    }
+    f.queue.unshift({ type: 'ctest-result', chapter: cid, title: c.title, pass: pass, n: n, ok: t.ok, pct: pct, bad: badN, tries: x.tries, again: pass ? [] : againList(st, c) });
+  }
+  // темы главы, которые снова в работе после теста
+  function againList(st, c) { return c.topics.filter(function (id) { const y = st.topics[id]; return y && y.status === 'learning'; }); }
+  function fixCard(st) {
+    const C = chapters(st);
+    for (let i = 0; i < C.length; i++) {
+      const x = st.ch && st.ch[C[i].id], fx = x && x.fix;
+      if (!fx) continue;
+      if (fx.i >= fx.items.length) {
+        x.fix = null;
+        ev(st, 'Глава «' + C[i].title + '»: ошибки проработаны');
+        return { type: 'info', kind: 'fix-done', chapter: C[i].id, text: chDone(st, C[i]) ? 'Ошибки проработаны. Теперь снова тест по главе «' + C[i].title + '». Задачи будут другие.'
+          : 'Ошибки проработаны. Теперь заново пройдём темы с несколькими ошибками. Потом снова тест.' };
+      }
+      const it = fx.items[fx.i];
+      if (it.ex && !it.shown) { it.shown = true; return { type: 'explain', topic: it.topic, step: it.step, lvl: it.lvl || 0, auto: true, fix: true }; }
+      return mat(st, { type: 'task', mode: 'f', topic: it.topic, step: it.step, chapter: C[i].id,
+        banner: 'Работа над ошибками. Верно подряд: ' + it.got + ' из ' + it.need + '.' });
+    }
+    return null;
+  }
+  function fixAnswer(st, card, out, now) {
+    const x = chs(st, card.chapter), fx = x.fix, it = fx && fx.items[fx.i];
+    if (!it || it.topic !== card.topic || it.step !== card.step) return;
+    if (out.res === 2) {
+      it.got++; it.fails = 0;
+      if (it.got >= it.need) { fx.i++; ev(st, '«' + short(it.topic) + '»: ошибка на ступени ' + it.step + ' проработана'); }
+      return;
+    }
+    if (out.res === 1) return;
+    it.got = 0; it.fails++;
+    it.lvl = Math.min((it.lvl || 0) + 1, M.maxLevel(it.topic, it.step));
+    if (it.fails >= 3 && it.step > 1) { it.step--; it.fails = 0; it.lvl = 0; ev(st, '«' + short(it.topic) + '»: работа над ошибками ступенью ниже'); }
+    fl(st).queue.push({ type: 'explain', topic: it.topic, step: it.step, lvl: it.lvl, auto: true, fix: true });
+  }
+  // главы для карты и отчёта
+  E.chapterRows = function (st) {
+    return chapters(st).map(function (c) {
+      const x = (st.ch && st.ch[c.id]) || { pass: '', best: 0, tries: 0, hist: [], test: null, fix: null };
+      let w = 0, d = 0;
+      c.topics.forEach(function (id) { const k = M.lessonsOf(T(id)); w += k; d += k * topicPart(st.topics[id]); });
+      const state = !c.full ? 'none' : x.pass ? 'passed' : x.test ? 'testing' : x.fix ? 'fixing' : chDone(st, c) && chOpen(st, c.topics[0]) ? 'due' : 'locked';
+      return { id: c.id, title: c.title, k: c.k, full: c.full, topics: c.topics, pct: w ? Math.round(100 * d / w) : 0, state: state,
+        pass: x.pass, best: x.best, tries: x.tries, hist: x.hist, open: chOpen(st, c.topics[0]),
+        test: x.test ? { i: x.test.i, n: x.test.qs.length } : null, fix: x.fix ? { i: x.fix.i, n: x.fix.items.length } : null, size: testSize(c) };
+    });
+  };
+  // доля пройденного по теме: закрыта или знакома - вся, в работе - по пройденным ступеням
+  function topicPart(x) {
+    if (!x) return 0;
+    if (['today', 'closed', 'known'].indexOf(x.status) >= 0) return 1;
+    if (x.status === 'learning') return Math.max(0, x.step - 1) / 5;
+    return 0;
+  }
+  // процент курса класса: от всех часов года по КТП
+  E.course = function (st) {
+    const g = gradeOf(st.learner), total = M.courseHours(g);
+    let d = 0;
+    scopeOf(st.learner).forEach(function (t) { d += M.lessonsOf(t) * topicPart(st.topics[t.id]); });
+    return { pct: Math.min(100, Math.round(100 * d / total)), done: d, total: total, grade: g };
+  };
 
   /* ---------- проверка на следующий день ---------- */
   function checkCard(st, today) {
@@ -648,10 +842,13 @@
     S.forEach(function (t) { (st.hist[today] = st.hist[today] || {})[t.id] = score(ts(st, t.id).th); });
     d.done = true; d.end = now;
     st.current = null;
-    const cur = currentTopic(st);
-    ev(st, 'Разведка: ' + d.n + ' задач. Старт: «' + (cur ? short(cur) : '-') + '»' + (cur && ts(st, cur).start > 1 ? ', ступень ' + ts(st, cur).start : ''));
+    const due = dueChapter(st);
+    let cur = currentTopic(st);
+    // глава закрыта тестом: тема, к которой вернёмся после теста
+    if (!cur) S.forEach(function (t) { const x = st.topics[t.id]; if (!cur && x && (x.status === 'new' || x.status === 'learning')) cur = t.id; });
+    ev(st, 'Разведка: ' + d.n + ' задач. Старт: «' + (cur ? short(cur) : '-') + '»' + (cur && ts(st, cur).start > 1 ? ', ступень ' + ts(st, cur).start : '') + (due ? '. Сначала тест по главе «' + due.title + '»' : ''));
     E.save(st);
-    return { type: 'diag-done', topic: cur };
+    return { type: 'diag-done', topic: cur, test: due ? due.title : '' };
   };
 
   /* ---------- сохранение и коды ---------- */
@@ -687,7 +884,7 @@
   E.newState = newState;
 
   function learnerData(st) {
-    return { v: st.v, cv: M.CONTENT_VERSION, learner: st.learner, diag: st.diag, topics: st.topics, current: st.current, stack: st.stack,
+    return { v: st.v, cv: M.CONTENT_VERSION, learner: st.learner, diag: st.diag, topics: st.topics, ch: st.ch, current: st.current, stack: st.stack,
       gaps: st.gaps, sessions: st.sessions, log: st.log, hist: st.hist, seq: st.seq, exported: Date.now() };
   }
   function b64(bytes) {
@@ -730,7 +927,7 @@
   };
   // восстановить ученика на этом устройстве
   E.restore = function (st, data) {
-    ['learner', 'diag', 'topics', 'current', 'stack', 'gaps', 'sessions', 'log', 'hist', 'seq'].forEach(function (k) { if (data[k] !== undefined) st[k] = data[k]; });
+    ['learner', 'diag', 'topics', 'ch', 'current', 'stack', 'gaps', 'sessions', 'log', 'hist', 'seq'].forEach(function (k) { if (data[k] !== undefined) st[k] = data[k]; });
     st._f = null;
     migrate(st);
     E.save(st);
@@ -747,7 +944,7 @@
   const DIAGL = { known: 'понятна', partial: 'частично понятна', basics: 'начать с основ', new: 'не проверялась' };
   const SRC = { diag: 'разведка', task: 'задача на ступени', base: 'проверка основы', prac: 'тренировка' };
   const RES = { 2: 'сразу верно', 1: 'с подсказкой', 0: 'решение показано', '-1': 'не знаю' };
-  const MODE = { d: 'разведка', l: 'ступень', c: 'контроль', n: 'проверка через день', r: 'повторение', g: 'возврат к задаче', b: 'проверка основы', e: 'лёгкая задача', x: 'глубже', p: 'тренировка', z: 'задача полегче' };
+  const MODE = { d: 'разведка', l: 'ступень', c: 'контроль', n: 'проверка через день', r: 'повторение', g: 'возврат к задаче', b: 'проверка основы', e: 'лёгкая задача', x: 'глубже', p: 'тренировка', z: 'задача полегче', t: 'тест по главе', f: 'работа над ошибками' };
   E.labels = { STATUS: STATUS, DIAGL: DIAGL, SRC: SRC, RES: RES, MODE: MODE };
   E.score = score; E.zone = zone; E.dkey = dkey; E.ddmm = ddmm; E.addDays = addDays;
 

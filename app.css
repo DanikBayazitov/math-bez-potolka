@@ -307,7 +307,7 @@ i.v { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-w
 .sheet-bg { position: fixed; inset: 0; background: rgba(20, 50, 74, .35); z-index: 20; }
 .sheet { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); width: 100%; max-width: 560px; background: var(--paper); border-radius: 22px 22px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 10px; z-index: 21; box-shadow: 0 -10px 30px rgba(20, 50, 74, .15); }
 .sheet p { font-weight: 700; font-size: 18px; }
-.toast { position: fixed; left: 50%; top: 14px; transform: translate(-50%, -80px); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 999px; font-weight: 800; z-index: 30; transition: transform .2s ease; max-width: calc(100% - 32px); text-align: center; }
+.toast { position: fixed; left: 50%; top: 14px; transform: translate(-50%, -160px); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 18px; font-weight: 800; z-index: 30; transition: transform .2s ease; width: max-content; max-width: min(360px, calc(100% - 32px)); text-align: center; line-height: 1.3; }
 .toast.show { transform: translate(-50%, 0); }
 
 /* раздел для взрослых */
@@ -407,3 +407,22 @@ i.v { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-w
 .euler .eu.n { fill: #CFE6F1; }
 .euler .eu-t { font: 700 13px var(--font-body); fill: var(--accent-ink); }
 .euler .eu-num { font: 800 15px var(--font-body); fill: var(--ink); }
+
+/* тесты по главам и процент курса */
+.course { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 2px; }
+.course-txt { display: flex; justify-content: space-between; align-items: baseline; font-weight: 800; color: var(--muted); font-size: 15px; }
+.course-txt .pct { font: 700 20px var(--font-display); color: var(--accent-ink); font-variant-numeric: tabular-nums; }
+.n-test .disc { border-radius: 20px; }
+.n-t-passed .disc { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+.n-t-due .disc, .n-t-testing .disc, .n-t-fixing .disc { background: var(--sun-soft); border-color: var(--sun-deep); color: var(--sun-deep); animation: pulse 1.9s ease-in-out infinite; }
+.n-t-locked .disc { background: #F3F7FA; border-color: var(--line); color: #93A5B3; }
+.n-t-locked .nlabel { color: var(--muted); }
+.card.ctest { text-align: center; }
+.card.ctest .big { font: 700 52px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+.card.ctest.pass .big { color: var(--ok); }
+.card.ctest.fail .big { color: #E4572E; }
+.card.ctest .lbl { margin-top: 10px; text-align: left; }
+.errs { list-style: none; margin: 6px 0 0; padding: 0; text-align: left; display: flex; flex-direction: column; gap: 6px; }
+.errs li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 12px; border-radius: 10px; background: #FDF1EC; }
+.errs li .n { font-weight: 800; color: #C2410C; white-space: nowrap; }
+.tries { margin: 6px 0 0; padding-left: 18px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }

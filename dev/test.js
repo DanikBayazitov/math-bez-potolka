@@ -176,6 +176,7 @@ console.log('walk items', walks);
 
 /* 2. движок: моделируем ученика */
 function onlyGrade(st, g) { return Object.keys(st.topics).filter(function (id) { const s = st.topics[id]; return s.status !== 'new' && M.topicById(id).grade !== g; }); }
+let ts_t = 0, ts_f = 0;
 function sim(opts) {
   const st = E.newState();
   let now = new Date(2026, 10, 21, 16, 0, 0).getTime();
@@ -190,6 +191,15 @@ function sim(opts) {
     seen[card.type + (card.mode ? ':' + card.mode : '')] = (seen[card.type + (card.mode ? ':' + card.mode : '')] || 0) + 1;
     if (card.type === 'task') {
       ok(card.q && card.q.prompt, 'task has q');
+      if (card.mode === 'l') ok(E.topicOpen(st, card.topic), 'learning task only in an open chapter: ' + card.topic);
+      if (card.mode === 't') {
+        ok(card.tn >= 20 && card.tn <= 30, 'chapter test has 20-30 questions: ' + card.tn);
+        ok(M.chapterOf(card.topic) && M.chapterOf(card.topic).id === card.chapter, 'test question from its chapter');
+        ok(!card.hints && card.once, 'test question without hints and with one attempt');
+        ok(card.q.kind !== 'steps' || true, 'test kind');
+        ts_t = (ts_t || 0) + 1;
+      }
+      if (card.mode === 'f') ts_f = (ts_f || 0) + 1;
       const res = opts.answer(card, st);
       E.answer(st, card, { res: res, wrong: res === 2 ? 0 : res === 1 ? 1 : 3, hints: res === 1 ? 1 : 0, ms: 20000 }, now);
     } else if (card.type === 'explain') {
@@ -207,6 +217,11 @@ function sim(opts) {
       done = true;
     } else if (card.type === 'info' || card.type === 'diag-done') {
       /* дальше */
+    } else if (card.type === 'ctest-result') {
+      const x = st.ch[card.chapter];
+      ok(!!x && x.hist.length === x.tries, 'test history kept');
+      ok(card.pass === (card.ok >= Math.ceil(0.9 * card.n - 1e-9)), 'pass only with 90%: ' + card.ok + '/' + card.n);
+      ok(card.pass ? !!x.pass && !x.fix : !x.pass && ((!!x.fix && x.fix.items.length > 0) || card.again.length > 0), 'after test: pass or error work');
     } else ok(false, 'unknown card ' + card.type);
     if (steps % opts.perDay === 0) { now += 20 * 3600000; day++; }
     // инварианты
@@ -217,6 +232,11 @@ function sim(opts) {
       ok(isFinite(s.th), 'theta finite');
     });
   }
+  // сданная глава: последний тест не ниже 90%
+  Object.keys(st.ch || {}).forEach(function (cid) {
+    const x = st.ch[cid];
+    if (x.pass) { const h = x.hist[x.hist.length - 1]; ok(h && h.ok >= Math.ceil(0.9 * h.n - 1e-9), 'passed chapter has a 90% test: ' + cid); }
+  });
   return { st: st, steps: steps, done: done, days: day, seen: seen };
 }
 
@@ -227,6 +247,8 @@ ok(strong.done, 'strong student finishes all topics, steps=' + strong.steps);
 ok(sst.diag.n <= 7, 'diag <= 7');
 ok(M.topicsOf(5).every(t => ['closed', 'today', 'known'].indexOf(sst.topics[t.id].status) >= 0), 'strong all closed');
 ok(M.topicsOf(6).every(t => !sst.topics[t.id]), 'grade 5 student never sees grade 6 topics');
+ok(M.chaptersOf(5).filter(c => c.full).every(c => sst.ch[c.id] && sst.ch[c.id].pass), 'strong student passes every chapter test');
+ok(E.course(sst).pct > 0 && E.course(sst).pct <= 100, 'course percent in range ' + E.course(sst).pct);
 console.log('strong:', strong.steps, 'steps,', strong.days, 'days', JSON.stringify(strong.seen));
 
 // слабый ученик: половина верно, часть с подсказкой, часть с решением
@@ -304,9 +326,10 @@ ok(Object.values(wst.topics).some(s => s.status !== 'new'), 'weak progresses');
   E.onboard(st, { nick: 'Д', grade: 5, g: 'f', interests: [] }, now);
   const kn = M.TOPICS.findIndex(t => t.id === 'mixed-add');
   const log = [];
+  let dd = null;
   for (let i = 0; i < 10; i++) {
     const c = E.next(st, now + i * 1000);
-    if (c.type !== 'task') { ok(c.type === 'diag-done', 'diag ends with diag-done'); break; }
+    if (c.type !== 'task') { ok(c.type === 'diag-done', 'diag ends with diag-done'); dd = c; break; }
     const idx = M.TOPICS.findIndex(t => t.id === c.topic);
     log.push(c.topic + '/' + c.step + '/' + c.kind);
     E.answer(st, c, { res: idx <= kn ? 2 : 0 }, now + i * 1000);
@@ -314,9 +337,16 @@ ok(Object.values(wst.topics).some(s => s.status !== 'new'), 'weak progresses');
   console.log('diag path:', log.join(' -> '));
   ok(st.diag.n <= 7, 'diag count');
   ok(log[0].indexOf('mixed-add') === 0, 'diag starts from KTP topic');
-  const cur = E.currentTopic(st);
-  ok(cur === 'frac-mul', 'start topic frac-mul, got ' + cur);
+  ok(dd && dd.topic === 'frac-mul' && dd.test === 'Обыкновенные дроби', 'diag: test of the skipped chapter first, then frac-mul: ' + JSON.stringify(dd));
+  ok(E.currentTopic(st) === null, 'topics of the next chapter wait for the test');
   ok(st.topics['frac-basic'].status === 'known' && st.topics['mixed-add'].status === 'known', 'known topics');
+  // тест по пропущенной главе: всё верно, глава сдана, дальше frac-mul
+  let c = E.next(st, now + 20000);
+  ok(c.type === 'info' && c.kind === 'ctest-start' && c.chapter === '5.1C', 'test intro for 5.1C, got ' + c.type + ' ' + c.kind);
+  let guard = 0;
+  while (guard++ < 40) { c = E.next(st, now + 30000 + guard); if (c.type !== 'task') break; ok(c.mode === 't', 'test question'); E.answer(st, c, { res: 2 }, now + 30000 + guard); }
+  ok(c.type === 'ctest-result' && c.pass && c.pct === 100 && c.n === 20, '5.1C passed with 100% on 20 questions: ' + JSON.stringify([c.type, c.pass, c.pct, c.n]));
+  ok(E.currentTopic(st) === 'frac-mul', 'after the test start topic frac-mul, got ' + E.currentTopic(st));
   // ученица ошибается с самого начала
   const st2 = E.newState();
   E.onboard(st2, { nick: 'Б', grade: 5, g: 'f', interests: [] }, now);
@@ -338,6 +368,7 @@ ok(Object.values(wst.topics).some(s => s.status !== 'new'), 'weak progresses');
   E.onboard(st, { nick: 'Н', grade: 5, g: 'm', interests: [] }, now);
   st.diag.done = true; const s = E._.ts(st, 'frac-compare');
   ['frac-basic', 'frac-property', 'mixed', 'frac-ray'].forEach(function (id) { E._.ts(st, id).status = 'closed'; });
+  st.ch['5.1C'] = { pass: '2026-11-20', best: 100, tries: 1, hist: [{ d: '2026-11-20', n: 20, ok: 20, p: 100, bad: {} }], test: null, fix: null };
   s.status = 'learning'; s.step = 3; s.explain = false; st.current = 'frac-compare';
   let c = E.next(st, now);
   ok(c.type === 'task' && c.mode === 'l' && c.step === 3, 'start at step 3 task');

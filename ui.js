@@ -189,8 +189,9 @@
     } else {
       a.wrong++; a.totalWrong++;
       if (c.once) {
-        a.msg = { type: 'note', html: c.mode === 'd' ? 'Принято.' : 'Посмотри решение.' };
-        if (c.mode !== 'd') a.revealed = true;
+        const quiet = c.mode === 'd' || c.mode === 't';
+        a.msg = { type: 'note', html: quiet ? 'Принято.' : 'Посмотри решение.' };
+        if (!quiet) a.revealed = true;
         if (c.q.kind === 'steps') { a.subs[a.sub] = { res: 0 }; finishTask(0); } else endSpec(0);
       } else if (a.wrong >= 3) {
         a.revealed = true;
@@ -231,6 +232,7 @@
     a.specDone = true; a.done = true; a.res = res;
     E.answer(U.st, c, { res: res, wrong: a.totalWrong, hints: a.totalHints, ms: Date.now() - a.t0 }, Date.now());
     if (c.mode === 'd') { toast(res === 2 ? 'Верно' : 'Принято'); nextCard(); }
+    else if (c.mode === 't') { toast('Ответ принят'); nextCard(); }
   }
 
   function vInput(spec) {
@@ -372,6 +374,9 @@
   }
   function headTask(c) {
     const t = T(c.topic), s = U.st.topics[c.topic];
+    if (c.mode === 't') {
+      return '<div class="prog"><div class="prog-txt">Вопрос ' + (c.ti + 1) + ' из ' + c.tn + '. Без подсказок.</div><div class="prog-bar" role="progressbar" aria-valuemin="0" aria-valuemax="' + c.tn + '" aria-valuenow="' + (c.ti + 1) + '"><i style="width:' + Math.round(100 * (c.ti + 1) / c.tn) + '%"></i></div></div>' + tchip(t);
+    }
     if (c.mode === 'd') {
       return '<div class="prog"><div class="prog-txt">Задача ' + c.n + ' из ' + c.total + '</div><div class="prog-bar" role="progressbar" aria-valuemin="0" aria-valuemax="' + c.total + '" aria-valuenow="' + c.n + '"><i style="width:' + Math.round(100 * c.n / c.total) + '%"></i></div></div>';
     }
@@ -386,7 +391,7 @@
   }
   function taskTitle(c) {
     if (c.prac) return 'Тренировка';
-    return { d: 'Разведка', l: 'Ступень ' + c.step, c: 'Контроль', n: 'Проверка', r: 'Повторение', g: 'Возврат к задаче', b: 'Проверка основы', e: 'Разгон', x: 'Глубже', p: 'Тренировка', z: 'Полегче' }[c.mode] || '';
+    return { d: 'Разведка', l: 'Ступень ' + c.step, c: 'Контроль', n: 'Проверка', r: 'Повторение', g: 'Возврат к задаче', b: 'Проверка основы', e: 'Разгон', x: 'Глубже', p: 'Тренировка', z: 'Полегче', t: 'Тест по главе', f: 'Работа над ошибками' }[c.mode] || '';
   }
   function vTask(c) {
     const a = U.att, q = c.q;
@@ -474,6 +479,19 @@
       (c.deep ? '<button class="btn btn-secondary" data-act="deep" data-id="' + c.topic + '">' + IC.star + ' Глубже: задачи выше класса</button>' : '') + '</div>';
     return h;
   }
+  function vTestResult(c) {
+    const names = Object.keys(c.bad || {}).map(function (id) { const n = c.bad[id]; return '<li><span>' + esc(T(id).short) + '</span><span class="n">' + n + ' ' + plural(n, ['ошибка', 'ошибки', 'ошибок']) + '</span></li>'; }).join('');
+    let h = bar({ left: mapBtn(), title: 'Итог теста', right: menuBtn() });
+    h += '<section class="card ctest ' + (c.pass ? 'pass' : 'fail') + '"><div class="big">' + c.pct + '%</div><p class="sub">Верно ' + c.ok + ' из ' + c.n + '. Нужно 90%.</p>';
+    if (c.pass) h += '<h2>Глава «' + esc(c.title) + '» сдана.</h2><p>Следующая глава открыта.</p>';
+    else h += '<h2>Пока меньше 90%.</h2><p>Разберём ошибки по темам. Потом будет новый тест.</p>' +
+      ((c.again || []).length ? '<p>Темы с несколькими ошибками пройдём заново по ступеням: ' + c.again.map(function (id) { return '«' + esc(T(id).short) + '»'; }).join(', ') + '.</p>' : '');
+    if (names) h += '<div class="lbl">Ошибки по темам</div><ul class="errs">' + names + '</ul>';
+    h += '</section>';
+    h += say(c.pass ? 'Отличная работа. Идём дальше.' : 'Ошибки покажут слабые места. Справимся.');
+    h += '<button class="btn btn-primary" data-act="next" id="next-btn">' + (c.pass ? 'Дальше' : 'Работа над ошибками') + ' ' + IC.arrow + '</button>';
+    return h;
+  }
   function vBreak(c) {
     const text = c.reason === 'time' ? 'Ты занимаешься уже ' + U.st.settings.sessionMin + ' минут. Хорошая работа. Можно закончить на сегодня.'
       : 'Сложный участок. Можно отдохнуть и вернуться позже.';
@@ -483,7 +501,8 @@
   function vDiagDone(c) {
     const t = c.topic ? T(c.topic) : null;
     return bar({ title: 'Разведка' }) + say('Готово! Точка старта найдена.') +
-      '<section class="card">' + (t ? '<p>Начнём с темы «' + esc(t.title) + '».</p>' : '<p>Все темы на карте уже светятся.</p>') +
+      '<section class="card">' + (c.test ? '<p>Сначала тест по главе «' + esc(c.test) + '». Так мы проверим знакомые главы.</p>' : '') +
+      (t ? '<p>' + (c.test ? 'Потом начнём' : 'Начнём') + ' тему «' + esc(t.title) + '».</p>' : '<p>Все темы на карте уже светятся.</p>') +
       '<p class="muted">Знакомые темы уже светятся на карте. По ходу дела мы проверим их ещё раз.</p></section>' +
       '<button class="btn btn-primary" data-act="go-map">Открыть карту ' + IC.arrow + '</button>';
   }
@@ -509,9 +528,19 @@
     return { closed: 'светится', known: 'знакома', today: s && s.due && s.due <= td ? 'проверка сегодня' : 'проверка завтра', current: 'сейчас', learning: 'в работе', open: 'можно начать', locked: 'позже' }[state];
   }
   function dueCheck() { const td = today(); return M.TOPICS.find(function (t) { const s = U.st.topics[t.id]; return s && s.status === 'today' && s.due && s.due <= td; }); }
+  function testLabel(c) {
+    return { passed: 'сдан: ' + c.best + '%', testing: c.test ? 'вопрос ' + (c.test.i + 1) + ' из ' + c.test.n : 'идёт тест', fixing: 'работа над ошибками', due: 'можно сдавать', locked: 'после тем главы' }[c.state] || '';
+  }
   function vMap() {
     const st = U.st, l = st.learner, td = today(), cur = E.currentTopic(st), gi = M.gradeInfo(E.gradeOf(l));
-    const items = E.scope(st).map(function (t) { return { t: t, state: nodeState(t.id, cur, td) }; }).concat(gi.future.map(function (n) { return { fog: n }; }));
+    const chs = E.chapterRows(st), course = E.course(st);
+    const items = [];
+    chs.forEach(function (c) {
+      c.topics.forEach(function (id) { items.push({ t: T(id), state: nodeState(id, cur, td) }); });
+      if (c.full) items.push({ c: c, state: c.state });
+    });
+    gi.future.forEach(function (n) { items.push({ fog: n }); });
+    const busy = chs.find(function (c) { return c.state === 'testing' || c.state === 'fixing' || c.state === 'due'; });
     const X = [50, 76, 50, 24], STEP = 124, TOP = 44, HGT = TOP + (items.length - 1) * STEP + 96;
     const pts = items.map(function (it, i) { return [X[i % 4], TOP + i * STEP]; });
     function seg(upto) {
@@ -520,13 +549,17 @@
       return d;
     }
     let lit = -1;
-    items.forEach(function (it, i) { if (it.t && ['closed', 'known', 'today'].indexOf(it.state) >= 0 && lit === i - 1) lit = i; });
+    items.forEach(function (it, i) { if (((it.t && ['closed', 'known', 'today'].indexOf(it.state) >= 0) || (it.c && it.state === 'passed')) && lit === i - 1) lit = i; });
     const check = dueCheck();
     let greet = 'Привет, ' + l.nick + '! Продолжим?';
     if (check) greet = 'Привет, ' + l.nick + '! Сегодня начнём с проверки темы «' + check.short + '».';
+    else if (busy && busy.state === 'testing') greet = 'Привет, ' + l.nick + '! Продолжим тест по главе «' + busy.title + '».';
+    else if (busy && busy.state === 'fixing') greet = 'Привет, ' + l.nick + '! Продолжим работу над ошибками. Потом новый тест.';
+    else if (busy) greet = 'Привет, ' + l.nick + '! Пора сдать тест по главе «' + busy.title + '».';
     else if (!cur) greet = 'Привет, ' + l.nick + '! Все темы светятся. Выбирай тему и иди глубже.';
     let h = bar({ left: '<span class="nick">' + esc(l.nick) + '</span>', title: gi.map, right: menuBtn() });
     h += say(greet);
+    h += '<div class="course" role="group" aria-label="Курс ' + course.grade + ' класса пройден на ' + course.pct + '%"><div class="course-txt"><span>Курс ' + course.grade + ' класса</span><span class="pct">' + course.pct + '%</span></div><div class="prog-bar"><i style="width:' + course.pct + '%"></i></div></div>';
     if (!LS_OK) h += '<div class="msg note">Этот браузер не сохраняет прогресс. Открой ссылку в обычном окне Chrome или Safari.</div>';
     const lastExp = st.settings.lastExport || '';
     if (st.sessions.length > 3 && (!lastExp || E.addDays(lastExp, 7) <= td)) h += '<button class="remind" data-act="send">' + IC.copy + '<span>Пора отправить код учителю. Это займёт минуту.</span></button>';
@@ -539,6 +572,12 @@
     items.forEach(function (it, i) {
       const pos = 'left:' + pts[i][0] + '%;top:' + pts[i][1] + 'px';
       if (it.fog) { h += '<button class="node n-fog" style="' + pos + '" data-act="fog" aria-label="' + esc(it.fog) + ', скоро"><span class="disc">' + IC.lock + '</span><span class="nlabel">' + esc(it.fog) + '<small>скоро</small></span></button>'; return; }
+      if (it.c) {
+        const c = it.c, icon = c.state === 'passed' ? IC.check : c.state === 'locked' ? IC.lock : IC.star;
+        h += '<button class="node n-test n-t-' + c.state + '" style="' + pos + '" data-act="ctest" data-id="' + esc(c.id) + '" aria-label="Тест по главе ' + esc(c.title) + '. ' + testLabel(c) + '">' +
+          '<span class="disc">' + icon + '</span><span class="nlabel">Тест: ' + esc(c.title) + '<small>' + testLabel(c) + '</small></span></button>';
+        return;
+      }
       const t = it.t, s = st.topics[t.id], sc = s ? E.score(s.th) : 0, len = 2 * Math.PI * 35;
       const inner = it.state === 'closed' ? IC.sun : it.state === 'today' ? IC.clock : it.state === 'known' ? IC.check : it.state === 'locked' ? IC.lock : '<span>' + t.n + '</span>';
       const ring = '<svg class="ring" viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="35" class="ring-bg"/><circle cx="40" cy="40" r="35" class="ring-fg" stroke-dasharray="' + (len * sc / 50).toFixed(1) + ' ' + len.toFixed(1) + '"/></svg>';
@@ -547,8 +586,8 @@
     });
     h += '</div>';
     if (cur && T(cur).grade !== E.gradeOf(l)) h = h.replace('<div class="map"', '<div class="msg note">Сейчас повторяем основу из ' + T(cur).grade + ' класса: «' + esc(T(cur).short) + '». Потом вернёмся к своей теме.</div><div class="map"');
-    const label = check ? 'Начать проверку' : cur ? 'Продолжить: ' + T(cur).short : 'Глубже';
-    h += '<div class="dock"><button class="btn btn-primary" data-act="' + (cur || check ? 'continue' : 'all-done') + '">' + esc(label) + ' ' + IC.arrow + '</button></div>';
+    const label = check ? 'Начать проверку' : busy ? { testing: 'Продолжить тест', fixing: 'Работа над ошибками', due: 'Начать тест' }[busy.state] : cur ? 'Продолжить: ' + T(cur).short : 'Глубже';
+    h += '<div class="dock"><button class="btn btn-primary" data-act="' + (cur || check || busy ? 'continue' : 'all-done') + '">' + esc(label) + ' ' + IC.arrow + '</button></div>';
     return h;
   }
 
@@ -661,9 +700,10 @@
     const closed = rows.filter(function (r) { return r.status === 'closed' || r.status === 'today'; }).length;
     const known = rows.filter(function (r) { return r.status === 'known'; }).length, work = rows.filter(function (r) { return r.status === 'learning'; }).length;
     let min = 0; E.days(data).forEach(function (d) { min += d.min; });
-    let h = '<div class="kpis">' + kpi(closed + ' из ' + rows.length, 'тем закрыто') + kpi(known, 'знакомы по разведке') + kpi(work, 'в работе') + kpi(min ? E.fmtMin(min) : '0 мин', 'время занятий') + '</div>';
+    let h = '<div class="kpis">' + kpi(E.course(data).pct + '%', 'курса класса по КТП') + kpi(closed + ' из ' + rows.length, 'тем закрыто') + kpi(known, 'знакомы по разведке') + kpi(work, 'в работе') + kpi(min ? E.fmtMin(min) : '0 мин', 'время занятий') + '</div>';
     h += chart(E.series(data), data);
-    h += '<div class="trows">' + rows.map(function (r) {
+    h += tChapters(data);
+    h += '<h3>Темы</h3><div class="trows">' + rows.map(function (r) {
       const w = Math.round(100 * r.score / 50);
       return '<div class="trow"><div class="tr-top"><span class="tchip">' + r.n + '</span><div class="tr-name"><div>' + esc(r.title) + '</div>' +
         '<div class="muted small">Уроки ' + r.lessons + ' (' + ddmm(r.dates[0]) + '-' + ddmm(r.dates[1]) + '). Цели: ' + r.codes.join(', ') + '</div></div></div>' +
@@ -673,6 +713,20 @@
         (r.deepN ? '<span>Глубже: ' + r.deep + ' из ' + r.deepN + '</span>' : '') + (r.review ? '<span>Повторение ' + ddmm(r.review) + '</span>' : '') + '</div></div>';
     }).join('') + '</div>';
     return h;
+  }
+  // тесты по главам: попытки, проценты, ошибки по темам
+  function tChapters(data) {
+    const LBL = { passed: 'сдана', testing: 'идёт тест', fixing: 'работа над ошибками', due: 'ждёт тест', locked: 'темы ещё не пройдены', none: 'без теста: в приложении пока не все уроки главы' };
+    return '<h3>Тесты по главам</h3><div class="trows">' + E.chapterRows(data).map(function (c) {
+      const tries = (c.hist || []).map(function (x, i) {
+        const bad = Object.keys(x.bad || {}).map(function (id) { return '«' + esc(T(id).short) + '» ' + x.bad[id]; }).join(', ');
+        return '<li>Попытка ' + (i + 1) + ' от ' + ddmm(x.d) + ': ' + x.p + '% (' + x.ok + ' из ' + x.n + ')' + (bad ? '. Ошибки: ' + bad : '') + '</li>';
+      }).join('');
+      const pill = c.state === 'passed' ? 'closed' : c.state === 'locked' || c.state === 'none' ? 'new' : 'learning';
+      return '<div class="trow"><div class="tr-top"><span class="tchip">' + esc(c.id) + '</span><div class="tr-name"><div>' + esc(c.title) + '</div>' +
+        '<div class="muted small">Пройдено ' + c.pct + '%.' + (c.full ? ' Тест: ' + M.pl(c.size, ['вопрос', 'вопроса', 'вопросов']) + '. Нужно 90%.' : '') + '</div></div></div>' +
+        '<div class="tr-mid"><span class="pill p-' + pill + '"><span>' + LBL[c.state] + '</span></span></div>' + (tries ? '<ul class="tries small">' + tries + '</ul>' : '') + '</div>';
+    }).join('') + '</div>';
   }
   function dayNum(k) { const p = k.split('-').map(Number); return Date.UTC(p[0], p[1] - 1, p[2]) / 86400000; }
   function chart(series, data) {
@@ -959,7 +1013,7 @@
       if (!a || a.done) return;
       a.done = true;
       E.answer(U.st, U.card, { res: -1, wrong: 0, hints: 0, ms: Date.now() - a.t0 }, Date.now());
-      toast('Хорошо. Идём дальше');
+      toast(U.card.mode === 't' ? 'Ответ принят' : 'Хорошо. Идём дальше');
       nextCard();
     },
     'say-task': function () { const q = U.card.q; const parts = [q.prompt]; if (q.kind === 'steps') parts.push(curSpec().prompt); TTS.say(parts); },
@@ -991,6 +1045,7 @@
     'all-done': function () { U.card = { type: 'done' }; U.screen = 'card'; render(); },
     node: function (el) {
       const id = el.dataset.id, t = T(id), s = U.st.topics[id], status = s ? s.status : 'new', opts = [];
+      if ((status === 'learning' || status === 'new') && !E.topicOpen(U.st, id)) { const b = E.blocker(U.st, id); toast(b ? 'Сначала тест по главе «' + b.title + '»' : 'Пока закрыто'); return; }
       if (status === 'learning' || (status === 'new' && E.avail(U.st, id))) opts.push({ label: status === 'learning' ? 'Продолжить тему' : 'Начать тему', primary: true, icon: IC.arrow, act: function () { E.choose(U.st, id); nextCard(); } });
       if (['learning', 'today', 'closed', 'known'].indexOf(status) >= 0) opts.push({ label: 'Тренировка: 8 задач', primary: !opts.length, icon: IC.bulb, act: function () { E.practice(U.st, id); nextCard(); } });
       if (['today', 'closed', 'known'].indexOf(status) >= 0) {
@@ -1003,6 +1058,13 @@
       toast(miss.length ? 'Сначала тема «' + T(miss[0]).short + '»' : 'Пока закрыто');
     },
     fog: function () { toast('Скоро появится'); },
+    ctest: function (el) {
+      const c = E.chapterRows(U.st).find(function (x) { return x.id === el.dataset.id; });
+      if (!c) return;
+      if (c.state === 'passed') { toast('Глава сдана: ' + c.best + '%'); return; }
+      if (c.state === 'locked') { toast('Сначала пройди все темы главы'); return; }
+      nextCard();
+    },
     menu: function () { U.menu = !U.menu; render(); },
     end: function () { TTS.stop(); U.menu = false; E.save(U.st); U.screen = 'summary'; U.card = null; U.att = null; render(); },
     send: function () { openSend(); },
@@ -1092,6 +1154,7 @@
         if (c.type === 'info') return vInfo(c);
         if (c.type === 'closed') return vClosed(c);
         if (c.type === 'break') return vBreak(c);
+        if (c.type === 'ctest-result') return vTestResult(c);
         if (c.type === 'diag-done') return vDiagDone(c);
         return vAllDone();
       }

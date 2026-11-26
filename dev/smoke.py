@@ -72,6 +72,21 @@ def solve_task(page, wrong_first=False):
         first = False
         page.wait_for_timeout(60)
 
+def pass_tests(page):
+    # тест по главе, которую разведка засчитала: отвечаем верно
+    for k in range(90):
+        c = page.evaluate("() => { const c = window.MBP.U.card; return c ? { type: c.type, kind: c.kind || '', mode: c.mode || '' } : null }")
+        if not c: return
+        if c['type'] == 'info' and c['kind'] == 'ctest-start':
+            snap(page, '5a-test'); page.click('#next-btn'); page.wait_for_timeout(150); continue
+        if c['type'] == 'task' and c['mode'] == 't':
+            info = page.evaluate(SOLVE)
+            if k == 2: snap(page, '5b-test-q')
+            answer(page, info); page.wait_for_timeout(150); continue
+        if c['type'] == 'ctest-result':
+            snap(page, '5c-test-result'); page.click('#next-btn'); page.wait_for_timeout(150); continue
+        return
+
 with sync_playwright() as p:
     b = p.chromium.launch(executable_path='/usr/bin/google-chrome', args=['--no-sandbox'])
     ctx = b.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, locale='ru-RU')
@@ -101,6 +116,7 @@ with sync_playwright() as p:
     page.click('[data-act="go-map"]'); page.wait_for_timeout(300)
     snap(page, '4-map')
     page.click('[data-act="continue"]'); page.wait_for_timeout(200)
+    pass_tests(page)
     snap(page, '5-explain')
     page.click('[data-act="ok"]'); page.wait_for_timeout(200)
     solve_task(page, wrong_first=True) if False else None
