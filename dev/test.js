@@ -5,11 +5,12 @@ const APP = process.env.APP || path.join(__dirname, '..');
 require(path.join(APP, 'frac.js'));
 require(path.join(APP, 'rat.js'));
 require(path.join(APP, 'alg.js'));
+if (require('fs').existsSync(path.join(APP, 'phys.js'))) require(path.join(APP, 'phys.js'));
 require(path.join(APP, 'content.js'));
 require(path.join(APP, 'content2.js'));
 require(path.join(APP, 'content3.js'));
 require(path.join(APP, 'content6a.js'));
-['content6b.js', 'content6c.js', 'content6d.js'].forEach(function (f) { if (require('fs').existsSync(path.join(APP, f))) require(path.join(APP, f)); });
+['content6b.js', 'content6c.js', 'content6d.js', 'content_p8.js'].forEach(function (f) { if (require('fs').existsSync(path.join(APP, f))) require(path.join(APP, f)); });
 require(path.join(APP, 'grades.js'));
 require(path.join(APP, 'engine.js'));
 const M = globalThis.M, E = M.E;
@@ -110,7 +111,7 @@ const INT = ['football', 'games', 'animals', 'drawing', 'music', 'cooking', 'spa
 let generated = 0;
 M.TOPICS.forEach(function (t) {
   ok(t.codes && t.codes.length, t.id + ' codes');
-  ok(t.dates && t.dates.length === 2, t.id + ' dates');
+  ok((t.dates && t.dates.length === 2) || (t.dates === null && !!t.dateNote), t.id + ' dates');
   ok(t.diag && t.steps[t.diag[0]] && t.steps[t.diag[0]].gens[t.diag[1]], t.id + ' diag item');
   t.prereq.forEach(function (p) { ok(M.TOPICS.findIndex(x => x.id === p) < M.TOPICS.indexOf(t), t.id + ' prereq order ' + p); });
   ok(t.steps.length === 5, t.id + ' 5 steps');
@@ -178,9 +179,9 @@ console.log('walk items', walks);
 function onlyGrade(st, g) { return Object.keys(st.topics).filter(function (id) { const s = st.topics[id]; return s.status !== 'new' && M.topicById(id).grade !== g; }); }
 let ts_t = 0, ts_f = 0;
 function sim(opts) {
-  const st = E.newState();
-  let now = new Date(2026, 10, 21, 16, 0, 0).getTime();
-  E.onboard(st, { nick: 'Тест', grade: opts.grade || 5, g: 'm', interests: ['football'] }, now);
+  const st = E.newState(opts.subj);
+  let now = opts.start || new Date(2026, 10, 21, 16, 0, 0).getTime();
+  E.onboard(st, { nick: 'Тест', grade: opts.grade || 5, g: 'm', interests: ['football'], subj: opts.subj }, now);
   let steps = 0, day = 0, done = false;
   const seen = {};
   while (steps < opts.max && !done) {
@@ -317,6 +318,55 @@ ok(Object.values(wst.topics).some(s => s.status !== 'new'), 'weak progresses');
   ok(E.scope(m5).every(t => t.grade === 5), 'old grade 5 learner sees only grade 5 topics');
   // ученик 5 класса не получает темы 6 класса на карте
   ok(E.scope({ learner: { grade: 5 } }).every(t => t.grade === 5) && E.scope({ learner: { grade: 6 } }).every(t => t.grade === 6), 'scope by grade');
+})();
+
+/* 2в. физика 8 класса */
+(function () {
+  const p8 = M.topicsOf(8, 'phys'), ids = p8.map(t => t.id);
+  ok(p8.length === 7 && p8.every(t => t.subj === 'phys' && t.grade === 8), 'physics 8: 7 topics');
+  ok(M.chaptersOf(8, 'phys').length === 1 && M.chaptersOf(8, 'phys')[0].topics.length === 7 && M.chaptersOf(8, 'phys')[0].full, 'physics 8: one full chapter');
+  ok(M.topicsOf(5).every(t => t.subj === 'math') && M.topicsOf(6).every(t => t.subj === 'math'), 'math courses have no physics topics');
+  const onlyPhys = function (st) { return Object.keys(st.topics).every(id => M.topicById(id).subj === 'phys'); };
+  const sp = sim({ subj: 'phys', grade: 8, max: 3000, perDay: 60, answer: () => 2 });
+  ok(sp.done, 'physics strong finishes, steps=' + sp.steps);
+  ok(onlyPhys(sp.st), 'physics student sees only physics topics');
+  ok(sp.st.learner.subj === 'phys' && sp.st.subj === 'phys', 'state knows its subject');
+  ok(p8.every(t => ['closed', 'today', 'known'].indexOf(sp.st.topics[t.id].status) >= 0), 'physics strong all closed');
+  ok(sp.st.ch['8.4.1'] && sp.st.ch['8.4.1'].pass, 'physics chapter test passed');
+  const cp = E.course(sp.st);
+  ok(cp.subj === 'phys' && cp.total === 68 && cp.pct === 10, 'physics course percent 7 of 68 lessons: ' + JSON.stringify(cp));
+  console.log('phys strong:', sp.steps, 'steps,', sp.days, 'days', JSON.stringify(sp.seen));
+  const wp = sim({ subj: 'phys', grade: 8, max: 5000, perDay: 50, simpler: 0.15, deep: 0.2, prac: 0.2, answer: function () { const r = Math.random(); return r < 0.4 ? 2 : r < 0.7 ? 1 : r < 0.97 ? 0 : -1; } });
+  ok(onlyPhys(wp.st) && Object.values(wp.st.topics).some(s => s.status !== 'new'), 'physics weak progresses inside physics');
+  console.log('phys weak:', wp.steps, 'steps, done=' + wp.done, JSON.stringify(wp.seen));
+  const ab = {};
+  const lp = sim({ subj: 'phys', grade: 8, max: 6000, perDay: 45, simpler: 0.03, deep: 0.2, prac: 0.2, answer: function (card) {
+    const t = card.topic; ab[t] = ab[t] === undefined ? -1.2 : ab[t] + 0.12;
+    const b = card.step === 6 ? 3 : E._.DIFF[card.step - 1];
+    const p = 1 / (1 + Math.exp(b - ab[t])), x = Math.random();
+    return x < p ? 2 : x < p + (1 - p) * 0.6 ? 1 : 0;
+  } });
+  const closedP = p8.filter(t => lp.st.topics[t.id] && ['closed', 'today'].indexOf(lp.st.topics[t.id].status) >= 0).length;
+  console.log('phys learner:', lp.steps, 'steps, done=' + lp.done, 'closed', closedP, 'chapter', JSON.stringify(lp.st.ch['8.4.1'] && { pass: lp.st.ch['8.4.1'].pass, tries: lp.st.ch['8.4.1'].tries }));
+  ok(lp.done || closedP >= 4, 'physics learner progresses');
+  // разведка 10 декабря: начинается с «Потенциала» по дате КТП
+  const st = E.newState('phys'), now = new Date(2026, 11, 10, 16, 0, 0).getTime();
+  E.onboard(st, { nick: 'Ф', grade: 8, g: 'm', interests: [], subj: 'phys' }, now);
+  const log = [], kn = ids.indexOf('e-coulomb');
+  let dd = null;
+  for (let i = 0; i < 10; i++) {
+    const c = E.next(st, now + i * 1000);
+    if (c.type !== 'task') { dd = c; break; }
+    log.push(c.topic + '/' + c.step);
+    ok(ids.indexOf(c.topic) >= 0, 'physics diag asks physics: ' + c.topic);
+    E.answer(st, c, { res: ids.indexOf(c.topic) <= kn ? 2 : 0 }, now + i * 1000);
+  }
+  console.log('phys diag path:', log.join(' -> '), '=>', JSON.stringify(dd));
+  ok(log[0] && log[0].indexOf('e-potential') === 0, 'physics diag starts from the KTP topic of the date');
+  ok(dd && dd.type === 'diag-done' && dd.topic === 'e-field' && !dd.test, 'physics diag ends at e-field without a test: ' + JSON.stringify(dd));
+  ok(E.currentTopic(st) === 'e-field', 'physics current topic e-field, got ' + E.currentTopic(st));
+  // математика и физика хранятся отдельно
+  ok(E._.keyOf ? E._.keyOf('phys') !== E._.keyOf('math') : true, 'separate storage keys');
 })();
 
 // разведка: знает темы до «Сложения смешанных чисел» включительно

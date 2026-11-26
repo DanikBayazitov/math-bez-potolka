@@ -16,8 +16,15 @@
 
   function T(id) { return TOPS[IDX[id]]; }
   // программа класса: темы своего класса по порядку КТП
-  function gradeOf(learner) { return learner && learner.grade >= 6 ? 6 : 5; }
-  function scopeOf(learner) { return M.topicsOf(gradeOf(learner)); }
+  function subjOf(learner) { return (learner && learner.subj) || 'math'; }
+  function gradeOf(learner) {
+    const g = learner && learner.grade;
+    if (subjOf(learner) === 'math') return g >= 6 ? 6 : 5;
+    return g || 8;
+  }
+  function scopeOf(learner) { return M.topicsOf(gradeOf(learner), subjOf(learner)); }
+  // свой ключ хранения у каждого предмета: прогресс по математике остаётся на прежнем месте
+  function keyOf(subj) { return subj && subj !== 'math' ? KEY + '.' + subj : KEY; }
   function scope(st) { return scopeOf(st.learner); }
   function sIdx(S, id) { for (let i = 0; i < S.length; i++) if (S[i].id === id) return i; return -1; }
   function title(id) { return T(id).title; }
@@ -49,9 +56,9 @@
   }
 
   /* ---------- состояние ---------- */
-  function newState() {
+  function newState(subj) {
     return {
-      v: 1, cv: M.CONTENT_VERSION, learner: null, diag: null, topics: {}, ch: {}, current: null, stack: [], gaps: [],
+      v: 1, cv: M.CONTENT_VERSION, subj: subj || 'math', learner: null, diag: null, topics: {}, ch: {}, current: null, stack: [], gaps: [],
       sessions: [], log: [], hist: {}, seq: 0,
       settings: { pin: '', sessionMin: 25, audio: true }, notes: {}, students: {}
     };
@@ -399,7 +406,7 @@
 
   /* ---------- главы: тест в конце главы и работа над ошибками ---------- */
   const PASS = 0.9;
-  function chapters(st) { return M.chaptersOf(gradeOf(st.learner)); }
+  function chapters(st) { return M.chaptersOf(gradeOf(st.learner), subjOf(st.learner)); }
   function chs(st, cid) {
     if (!st.ch) st.ch = {};
     return st.ch[cid] || (st.ch[cid] = { pass: '', best: 0, tries: 0, hist: [], test: null, fix: null });
@@ -568,10 +575,10 @@
   }
   // процент курса класса: от всех часов года по КТП
   E.course = function (st) {
-    const g = gradeOf(st.learner), total = M.courseHours(g);
+    const g = gradeOf(st.learner), total = M.courseHours(g, subjOf(st.learner));
     let d = 0;
     scopeOf(st.learner).forEach(function (t) { d += M.lessonsOf(t) * topicPart(st.topics[t.id]); });
-    return { pct: Math.min(100, Math.round(100 * d / total)), done: d, total: total, grade: g };
+    return { pct: Math.min(100, Math.round(100 * d / total)), done: d, total: total, grade: g, subj: subjOf(st.learner) };
   };
 
   /* ---------- проверка на следующий день ---------- */
@@ -759,11 +766,13 @@
     return { date: dkey(now), n: 0, lo: -1, hi: S.length, first: ktpIndex(dkey(now), S), pr: {}, done: false, g: gradeOf(learner) };
   }
   E.onboard = function (st, p, now) {
+    const subj = p.subj || st.subj || 'math';
+    st.subj = subj;
     st.learner = { id: 'L' + now.toString(36) + Math.floor(Math.random() * 1e6).toString(36), nick: p.nick, grade: p.grade, g: p.g,
-      interests: p.interests.slice(0, 3), created: now, lang: 'ru' };
+      interests: p.interests.slice(0, 3), created: now, lang: 'ru', subj: subj };
     E.touch(st, now);
     st.diag = newDiag(st.learner, now);
-    ev(st, 'Начало: ник «' + p.nick + '», ' + p.grade + ' класс');
+    ev(st, 'Начало: ник «' + p.nick + '», ' + (subj === 'math' ? '' : M.SUBJ[subj].title.toLowerCase() + ', ') + p.grade + ' класс');
     E.save(st);
   };
   function mainStep(S, i) { return S[i].diag[0] + 1; }
@@ -861,23 +870,29 @@
       if (!T(id)) { delete st.topics[id]; return; }
       const x = blank(); Object.keys(x).forEach(function (k) { if (st.topics[id][k] === undefined) st.topics[id][k] = x[k]; });
     });
-    if (st.learner && st.diag && gradeOf(st.learner) === 6 && st.diag.g !== 6) {
+    if (!st.subj) st.subj = subjOf(st.learner);
+    if (st.learner && st.diag && subjOf(st.learner) === 'math' && gradeOf(st.learner) === 6 && st.diag.g !== 6) {
       st.diag = newDiag(st.learner, Date.now());
       st.current = null; st.stack = [];
     }
     return st;
   }
-  E.load = function () {
-    try { if (hasLS()) { const raw = localStorage.getItem(KEY); if (raw) return migrate(JSON.parse(raw)); } } catch (e) { /* пусто */ }
-    return newState();
+  E.load = function (subj) {
+    subj = subj || 'math';
+    try { if (hasLS()) { const raw = localStorage.getItem(keyOf(subj)); if (raw) { const st = migrate(JSON.parse(raw)); st.subj = subj; return st; } } } catch (e) { /* пусто */ }
+    return newState(subj);
   };
   E.save = function (st) {
     try {
       if (!hasLS()) return false;
-      localStorage.setItem(KEY, JSON.stringify(st, function (k, v) { return k.charAt(0) === '_' ? undefined : v; }));
+      localStorage.setItem(keyOf(st.subj || subjOf(st.learner)), JSON.stringify(st, function (k, v) { return k.charAt(0) === '_' ? undefined : v; }));
       return true;
     } catch (e) { return false; }
   };
+  // последний выбранный предмет: с него открывается приложение
+  E.lastSubj = function () { try { return (hasLS() && localStorage.getItem(KEY + '.subj')) || 'math'; } catch (e) { return 'math'; } };
+  E.setLastSubj = function (subj) { try { if (hasLS()) localStorage.setItem(KEY + '.subj', subj); } catch (e) { /* пусто */ } };
+  E.subjOf = subjOf;
   E.storageOk = function () {
     try { if (!hasLS()) return false; localStorage.setItem(KEY + '.t', '1'); localStorage.removeItem(KEY + '.t'); return true; } catch (e) { return false; }
   };
@@ -965,7 +980,7 @@
       let st = STATUS[s.status];
       if (s.status === 'learning') st += ', ступень ' + s.step + (s.ctl ? ' (контроль)' : '');
       if (s.status === 'today') st = 'закрыта ' + ddmm(s.closed) + ', проверка ' + (s.due <= today ? 'на ближайшем занятии' : ddmm(s.due));
-      return { id: t.id, n: t.n, grade: t.grade || 5, title: t.title, codes: t.codes, lessons: t.lessons, dates: t.dates, status: s.status, label: st, score: sc, zone: zone(sc),
+      return { id: t.id, n: t.n, grade: t.grade || 5, title: t.title, codes: t.codes, lessons: t.lessons, dates: t.dates, dateNote: t.dateNote, status: s.status, label: st, score: sc, zone: zone(sc),
         diag: DIAGL[s.diag] || '', last: s.last, deep: s.deep, deepN: s.deepN, passed: s.passed.filter(Boolean).length,
         review: s.rdue && (s.status === 'closed' || s.status === 'known') ? s.rdue : '' };
     });

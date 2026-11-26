@@ -6,8 +6,9 @@
   const H = M.toHTML, esc = M.esc;
   const LS_OK = E.storageOk();
 
+  const SUBJ0 = E.lastSubj();
   const U = {
-    st: E.load(), screen: 'start', prev: 'map', card: null, att: null, key: '',
+    subj: SUBJ0, st: E.load(SUBJ0), screen: 'start', prev: 'map', card: null, att: null, key: '',
     onb: { grade: 5, interests: [], nick: '', g: 'm', err: '' },
     ad: { ok: false, tab: 'topics', who: 'self', pin: '', pin1: '', stage: '', err: '', period: 7, open: {}, day: null, sample: {}, imp: '', impMsg: '' },
     menu: false, sheet: null, code: '', codeState: '', rest: '', restMsg: '', exNote: '', toastT: 0, scrollMsg: false
@@ -93,24 +94,30 @@
   function tchip(t) { return '<div class="th"><span class="tchip">' + t.n + '</span><span class="tname">' + esc(t.title) + '</span></div>'; }
 
   /* ---------- первый вход ---------- */
+  function gradesText(list) { return list.length === 1 ? list[0] + ' класс' : list.slice(0, -1).join(', ') + ' и ' + list[list.length - 1] + ' класс'; }
   function vStart() {
-    const tiles = [['Математика', '5 и 6 класс', true], ['Физика', 'скоро', false], ['Русский язык', 'скоро', false], ['Информатика', 'скоро', false]];
+    const tiles = ['math', 'phys'].map(function (k) {
+      const x = k === U.subj ? U.st : E.load(k), l = x.learner;
+      return [M.SUBJ[k].title, l ? 'Продолжить: ' + l.grade + ' класс' : gradesText(M.SUBJ[k].grades), true, k];
+    }).concat([['Русский язык', 'скоро', false], ['Информатика', 'скоро', false]]);
     return bar({ title: 'Математика без потолка' }) +
       say('Привет! Что будем учить?') +
       '<div class="tiles">' + tiles.map(function (t) {
-        return t[2] ? '<button class="tile on" data-act="to" data-to="grade"><b>' + t[0] + '</b><span>' + t[1] + '</span></button>'
+        return t[2] ? '<button class="tile on" data-act="subj" data-s="' + t[3] + '"><b>' + t[0] + '</b><span>' + t[1] + '</span></button>'
           : '<div class="tile fog" aria-disabled="true"><b>' + t[0] + '</b><span>' + t[1] + '</span></div>';
       }).join('') + '</div>' +
       '<div class="seg-row" role="group" aria-label="Язык"><button class="seg on" aria-pressed="true">РУС</button><button class="seg" disabled>ҚАЗ · скоро</button></div>' +
       '<div class="foot-links"><button class="link" data-act="to" data-to="restore">Перенести свой прогресс</button><button class="link" data-act="adult">Учителю и родителям</button></div>';
   }
   function vGrade() {
-    return bar({ left: backBtn('start'), title: 'О себе' }) + say('Ты в каком классе?') +
-      '<div class="grades">' + [5, 6, 7, 8, 9, 10, 11].map(function (g) {
-        return g <= 6 ? '<button class="btn btn-secondary big" data-act="grade" data-g="' + g + '">' + g + '</button>'
+    const sj = M.SUBJ[U.subj];
+    return bar({ left: backBtn('start'), title: sj.title }) + say('Ты в каком классе?') +
+      '<div class="grades">' + sj.all.map(function (g) {
+        return sj.grades.indexOf(g) >= 0 ? '<button class="btn btn-secondary big" data-act="grade" data-g="' + g + '">' + g + '</button>'
           : '<button class="btn btn-fog big" disabled>' + g + '<small>скоро</small></button>';
       }).join('') + '</div>' +
-      '<p class="tip">Темы идут по программе твоего класса. Не хватает основы? Приложение само вернёт к нужной теме младшего класса.</p>';
+      '<p class="tip">' + (U.subj === 'math' ? 'Темы идут по программе твоего класса. Не хватает основы? Приложение само вернёт к нужной теме младшего класса.'
+        : 'Темы идут по КТП физики твоего класса. Формулы и единицы будут в объяснениях.') + '</p>';
   }
   function vInterests() {
     const sel = U.onb.interests;
@@ -251,9 +258,10 @@
       }).join('') + '</div>';
     }
     if (spec.kind === 'expr') return '<div class="ans-row">' + exprBox(dis) + '</div>' + (dis ? '' : exprPad(spec));
+    const unitTag = spec.unit ? '<span class="unit">' + H(spec.unit) + '</span>' : '';
     let h = '<div class="ans-row">';
     if (spec.neg) h += '<span class="sgn' + (a.inp.s ? ' on' : '') + '" aria-label="' + (a.inp.s ? 'Знак минус' : 'Без знака') + '">' + (a.inp.s ? M.MINUS : '') + '</span>';
-    if (spec.kind === 'number') h += box('v', dis);
+    if (spec.kind === 'number') h += box('v', dis) + unitTag;
     else {
       h += '<div class="fin">' + (spec.withWhole ? '<div class="fin-w">' + box('w', dis) + '<span class="cap">целая часть</span></div>' : '') +
         '<div class="fin-f">' + box('n', dis) + '<i class="fin-bar"></i>' + box('d', dis) + '</div></div>';
@@ -532,7 +540,7 @@
     return { passed: 'сдан: ' + c.best + '%', testing: c.test ? 'вопрос ' + (c.test.i + 1) + ' из ' + c.test.n : 'идёт тест', fixing: 'работа над ошибками', due: 'можно сдавать', locked: 'после тем главы' }[c.state] || '';
   }
   function vMap() {
-    const st = U.st, l = st.learner, td = today(), cur = E.currentTopic(st), gi = M.gradeInfo(E.gradeOf(l));
+    const st = U.st, l = st.learner, td = today(), cur = E.currentTopic(st), gi = M.gradeInfo(E.gradeOf(l), E.subjOf(l));
     const chs = E.chapterRows(st), course = E.course(st);
     const items = [];
     chs.forEach(function (c) {
@@ -559,7 +567,7 @@
     else if (!cur) greet = 'Привет, ' + l.nick + '! Все темы светятся. Выбирай тему и иди глубже.';
     let h = bar({ left: '<span class="nick">' + esc(l.nick) + '</span>', title: gi.map, right: menuBtn() });
     h += say(greet);
-    h += '<div class="course" role="group" aria-label="Курс ' + course.grade + ' класса пройден на ' + course.pct + '%"><div class="course-txt"><span>Курс ' + course.grade + ' класса</span><span class="pct">' + course.pct + '%</span></div><div class="prog-bar"><i style="width:' + course.pct + '%"></i></div></div>';
+    h += '<div class="course" role="group" aria-label="' + esc(gi.course) + ': пройдено ' + course.pct + '%"><div class="course-txt"><span>' + esc(gi.course) + '</span><span class="pct">' + course.pct + '%</span></div><div class="prog-bar"><i style="width:' + course.pct + '%"></i></div></div>';
     if (!LS_OK) h += '<div class="msg note">Этот браузер не сохраняет прогресс. Открой ссылку в обычном окне Chrome или Safari.</div>';
     const lastExp = st.settings.lastExport || '';
     if (st.sessions.length > 3 && (!lastExp || E.addDays(lastExp, 7) <= td)) h += '<button class="remind" data-act="send">' + IC.copy + '<span>Пора отправить код учителю. Это займёт минуту.</span></button>';
@@ -642,6 +650,7 @@
     return '<div class="sheet-bg" data-act="menu"></div><div class="sheet" role="dialog" aria-label="Меню">' +
       (U.st.learner && U.st.diag && U.st.diag.done ? '<button class="btn btn-secondary" data-act="go-map">' + IC.map + ' Карта</button><button class="btn btn-secondary" data-act="end">Закончить на сегодня</button><button class="btn btn-secondary" data-act="send">' + IC.copy + ' Отправить учителю</button>' : '') +
       (TTS.ok ? '<button class="btn btn-secondary" data-act="toggle-audio">' + IC.sound + ' Озвучка: ' + (U.st.settings.audio ? 'включена' : 'выключена') + '</button>' : '') +
+      '<button class="btn btn-secondary" data-act="subjects">Другой предмет</button>' +
       '<button class="btn btn-quiet" data-act="adult">Для взрослых</button><button class="btn btn-quiet" data-act="menu">Закрыть</button></div>';
   }
   function vSheet() {
@@ -706,7 +715,7 @@
     h += '<h3>Темы</h3><div class="trows">' + rows.map(function (r) {
       const w = Math.round(100 * r.score / 50);
       return '<div class="trow"><div class="tr-top"><span class="tchip">' + r.n + '</span><div class="tr-name"><div>' + esc(r.title) + '</div>' +
-        '<div class="muted small">Уроки ' + r.lessons + ' (' + ddmm(r.dates[0]) + '-' + ddmm(r.dates[1]) + '). Цели: ' + r.codes.join(', ') + '</div></div></div>' +
+        '<div class="muted small">Уроки ' + r.lessons + ' (' + (r.dates ? ddmm(r.dates[0]) + '-' + ddmm(r.dates[1]) : esc(r.dateNote || 'без даты')) + '). Цели: ' + r.codes.join(', ') + '</div></div></div>' +
         '<div class="tr-mid"><span class="pill p-' + r.status + '">' + statusIcon(r.status) + '<span>' + esc(r.label) + '</span></span>' + (r.diag ? '<span class="muted small">Разведка: ' + r.diag + '</span>' : '') + '</div>' +
         '<div class="meter" role="img" aria-label="Балл ' + r.score + ' из 50"><i style="width:' + w + '%"></i></div>' +
         '<div class="tr-foot"><span>Балл ' + r.score + ' из 50: ' + r.zone + '</span>' + (r.last ? '<span>Занятие ' + ddmm(r.last) + '</span>' : '') +
@@ -823,9 +832,10 @@
     let h = '<p>Здесь все объяснения и примеры задач. Отметьте проверенные ступени. Замечания можно скопировать и прислать для правки.</p>' +
       '<p class="small">Проверено ступеней: ' + reviewed + ' из ' + (M.TOPICS.length * 5) + '.</p>' +
       '<button class="btn btn-secondary" data-act="copy-notes">' + IC.copy + ' Скопировать замечания</button>';
-    let lastG = 0;
+    let lastG = '';
     M.TOPICS.forEach(function (t) {
-      if (t.grade !== lastG) { lastG = t.grade; h += '<h3>' + lastG + ' класс</h3>'; }
+      const head = (t.subj === 'math' ? 'Математика' : M.SUBJ[t.subj].title) + ', ' + t.grade + ' класс';
+      if (head !== lastG) { lastG = head; h += '<h3>' + esc(head) + '</h3>'; }
       const open = !!U.ad.open[t.id];
       h += '<details class="ct" data-tid="' + t.id + '"' + (open ? ' open' : '') + '><summary><span class="tchip">' + t.n + '</span><span>' + esc(t.title) + '<span class="muted small"> · ' + t.codes.join(', ') + '</span></span></summary>';
       if (open) {
@@ -879,7 +889,7 @@
       '<p>' + (LS_OK ? 'Этот браузер сохраняет прогресс.' : 'Этот браузер не сохраняет прогресс. Откройте ссылку в обычном окне Chrome или Safari.') + '</p>' +
       '<p class="muted">Очистка данных браузера стирает прогресс. Поэтому раз в неделю нужен код для учителя.</p>' +
       (U.st.learner ? '<h3>Сброс</h3><button class="btn btn-danger" data-act="wipe">Удалить прогресс ученика на этом телефоне</button>' : '') +
-      '<p class="muted small">Версия 3. ' + [5, 6].map(function (g) { const n = M.topicsOf(g).length; return M.gradeInfo(g).about + ': ' + n + ' ' + plural(n, ['тема', 'темы', 'тем']); }).join('. ') + '.</p>';
+      '<p class="muted small">Версия 4. ' + Object.keys(M.COURSES).map(function (k) { const c = M.COURSES[k], n = M.topicsOf(c.n, c.subj).length; return c.about + ': ' + n + ' ' + plural(n, ['тема', 'темы', 'тем']); }).join('. ') + '.</p>';
   }
 
   /* ---------- переходы ---------- */
@@ -979,6 +989,22 @@
       U.screen = to; render();
     },
     grade: function (el) { U.onb.grade = Number(el.dataset.g); U.screen = 'interests'; render(); },
+    subj: function (el) {
+      const k = el.dataset.s;
+      if (k !== U.subj) {
+        // ник и интересы из другого предмета подставим сами
+        const other = U.st.learner;
+        E.save(U.st);
+        U.subj = k; U.st = E.load(k); window.MBP.U = U;
+        if (!U.st.learner && other) { U.onb.nick = other.nick; U.onb.g = other.g; U.onb.interests = (other.interests || []).slice(); }
+      }
+      E.setLastSubj(k);
+      U.card = null; U.att = null; U.menu = false;
+      if (U.st.learner) { if (U.st.diag && U.st.diag.done) goMap(); else nextCard(); return; }
+      U.onb.grade = M.SUBJ[k].grades[0];
+      U.screen = 'grade'; render();
+    },
+    subjects: function () { TTS.stop(); E.save(U.st); U.menu = false; U.card = null; U.att = null; U.screen = 'start'; render(); },
     int: function (el) {
       const id = el.dataset.id, a = U.onb.interests, i = a.indexOf(id);
       if (i >= 0) a.splice(i, 1); else if (a.length < 3) a.push(id); else toast('Можно выбрать до трёх');
@@ -990,7 +1016,7 @@
       if (!v) { U.onb.err = 'Придумай ник. Подойдёт любое слово.'; render(); return; }
       U.onb.nick = v; U.onb.err = ''; U.screen = 'diag-intro'; render();
     },
-    'diag-start': function () { E.onboard(U.st, { nick: U.onb.nick, grade: U.onb.grade, g: U.onb.g, interests: U.onb.interests }, Date.now()); nextCard(); },
+    'diag-start': function () { E.onboard(U.st, { nick: U.onb.nick, grade: U.onb.grade, g: U.onb.g, interests: U.onb.interests, subj: U.subj }, Date.now()); E.setLastSubj(U.subj); nextCard(); },
     key: function (el) { typeKey(el.dataset.k); },
     focus: function (el) { if (U.att && !U.att.done) { U.att.focus = el.dataset.box; renderBoxes(); } },
     check: function () {
@@ -1072,6 +1098,9 @@
     'do-restore': function () {
       const text = (document.getElementById('rest-in') || {}).value || U.rest;
       E.importCode(text).then(function (data) {
+        // код по другому предмету: переключаемся на его хранилище
+        const sj = (data.learner && data.learner.subj) || 'math';
+        if (sj !== U.subj) { E.save(U.st); U.subj = sj; U.st = E.load(sj); E.setLastSubj(sj); window.MBP.U = U; }
         const apply = function () { E.restore(U.st, data); U.rest = ''; U.restMsg = ''; toast('Прогресс восстановлен'); goMap(); };
         if (U.st.learner && U.st.learner.id !== data.learner.id) confirmSheet({ text: 'На этом телефоне уже есть ученик «' + U.st.learner.nick + '». Заменить его прогресс прогрессом «' + data.learner.nick + '»?', yes: 'Заменить', danger: true, act: apply });
         else apply();
@@ -1112,7 +1141,7 @@
     'copy-notes': function () {
       const lines = [];
       M.TOPICS.forEach(function (t) {
-        for (let s = 1; s <= 5; s++) { const n = U.st.notes[t.id + ':' + s]; if (n && n.note && n.note.trim()) lines.push(t.grade + ' класс. Тема ' + t.n + ' «' + t.title + '». Ступень ' + s + ' «' + t.steps[s - 1].title + '»: ' + n.note.trim()); }
+        for (let s = 1; s <= 5; s++) { const n = U.st.notes[t.id + ':' + s]; if (n && n.note && n.note.trim()) lines.push((t.subj === 'math' ? '' : M.SUBJ[t.subj].title + '. ') + t.grade + ' класс. Тема ' + t.n + ' «' + t.title + '». Ступень ' + s + ' «' + t.steps[s - 1].title + '»: ' + n.note.trim()); }
       });
       if (!lines.length) { toast('Замечаний пока нет'); return; }
       copyText(lines.join('\n'), null);
@@ -1122,7 +1151,7 @@
     wipe: function () {
       confirmSheet({ text: 'Удалить прогресс ученика на этом телефоне? Сначала сохраните код во вкладке «Код».', yes: 'Удалить', danger: true, act: function () {
         const keep = { settings: U.st.settings, notes: U.st.notes, students: U.st.students };
-        U.st = E.newState(); Object.assign(U.st, keep); E.save(U.st); window.MBP.U = U;
+        U.st = E.newState(U.subj); Object.assign(U.st, keep); E.save(U.st); window.MBP.U = U;
         U.ad.who = 'self'; U.screen = 'adult'; toast('Прогресс удалён'); render();
       } });
     },

@@ -71,10 +71,11 @@
       if (p.length === 2) return fracHTML(p[0], p[1]);
       return m;
     });
-    // буква-переменная (одна латинская буква) курсивом; внутри тегов не трогаем
-    if (!/[a-z]/.test(text)) return html;
+    // буква-переменная курсивом: строчные (a, q, r) и одна заглавная (F, E, U); внутри тегов не трогаем
+    if (!/[A-Za-zφ]/.test(text)) return html;
     return html.split(/(<[^>]*>)/).map(function (part) {
-      return part.charAt(0) === '<' ? part : part.replace(/(^|[^A-Za-z&])([a-z]{1,3})(?![A-Za-z;])/g, '$1<i class="v">$2</i>');
+      return part.charAt(0) === '<' ? part : part.replace(/(^|[^A-Za-z&])([a-z]{1,3})(?![A-Za-z;])/g, '$1<i class="v">$2</i>')
+        .replace(/(^|[^A-Za-z&>])([A-Z])(?![A-Za-z;<])/g, '$1<i class="v">$2</i>').replace(/φ/g, '<i class="v">φ</i>');
     }).join('');
   }
 
@@ -155,12 +156,34 @@
       .replace(/км\/ч/g, 'километров в час')
       .replace(/(\d+),(\d*)\((\d+)\)/g, function (m, w, pre, per) { return w + ' целых ' + (pre ? pre + ' и ' : '') + per + ' в периоде'; })
       .replace(/\|([^|]+)\|/g, ' модуль $1 ')
+      .replace(/10([⁻]?)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/g, function (m, mi, d) { return '10 в степени ' + (mi ? 'минус ' : '') + d.split('').map(function (c) { return '⁰¹²³⁴⁵⁶⁷⁸⁹'.indexOf(c); }).join(''); })
+      .replace(/Н·м²\/Кл²/g, 'ньютон метр в квадрате на кулон в квадрате')
+      .replace(/(\d+(?:,\d+)?) ?(кН|Н|Дж)\/(Кл|кг)/g, function (m, d, u, per, off, str) { return d + ' ' + unitWord(u, d, str.slice(0, off)) + ' на ' + (per === 'Кл' ? 'кулон' : 'килограмм'); })
+      .replace(/кН\/Кл/g, 'килоньютон на кулон').replace(/Н\/Кл/g, 'ньютон на кулон').replace(/Дж\/Кл/g, 'джоуль на кулон').replace(/Н\/кг/g, 'ньютон на килограмм')
+      .replace(/²/g, ' в квадрате').replace(/³/g, ' в кубе').replace(/₁/g, ' один').replace(/₂/g, ' два').replace(/φ/g, 'фи ')
+      .replace(/(\d+(?:,\d+)?) ?(мкКл|нКл|Кл|мкН|мН|кН|Н|мкДж|Дж|мкФ|нФ|пФ|Ф|кВ|В|см|м|мг|кг)(?![А-Яа-яЁё])/g, function (m, d, u, off, str) {
+        return d + ' ' + unitWord(u, d, str.slice(0, off));
+      })
+      .replace(/\((мкКл|нКл|Кл|Н|Дж|Ф)\)/g, function (m, u) { return '(' + unitWord(u, '1') + ')'; })
       .replace(/−(?=[\d(a-z])/g, 'минус ')
       .replace(/ - /g, ', ')
-      .replace(/(^|[^A-Za-z])([a-z]{1,3})(?![A-Za-z])/g, function (m, p, w) { return p + ' ' + w.split('').map(function (l) { return LETTER[l] || l; }).join(' ') + ' '; });
+      .replace(/(^|[^A-Za-z])([a-z]{1,3})(?![A-Za-z])/g, function (m, p, w) { return p + ' ' + w.split('').map(function (l) { return LETTER[l] || l; }).join(' ') + ' '; })
+      .replace(/(^|[^A-Za-z])([ABCDEFKMNOPQRSTUW])(?![A-Za-z])/g, function (m, p, l) { return p + ' ' + LETTER[l.toLowerCase()] + ' '; });
+  }
+  // единицы физики: 1 кулон, 2 кулона, 5 кулонов, 0,5 кулона
+  const UNIT = { 'Кл': ['кулон', 'кулона', 'кулонов'], 'Н': ['ньютон', 'ньютона', 'ньютонов'], 'Дж': ['джоуль', 'джоуля', 'джоулей'], 'Ф': ['фарад', 'фарада', 'фарад'],
+    'В': ['вольт', 'вольта', 'вольт'], 'м': ['метр', 'метра', 'метров'], 'г': ['грамм', 'грамма', 'граммов'] };
+  const PREF = { 'мк': 'микро', 'н': 'нано', 'п': 'пико', 'м': 'милли', 'к': 'кило', 'с': 'санти' };
+  // before - текст перед числом: после «10 в степени ...» и после десятичной дроби единица в родительном падеже
+  function unitWord(u, num, before) {
+    let pre = '', base = u;
+    if (!UNIT[u]) { const m = u.match(/^(мк|н|п|м|к|с)(.+)$/); pre = PREF[m[1]]; base = m[2]; }
+    const f = UNIT[base];
+    const w = /,/.test(num) || /степени (минус )?$/.test(before || '') ? f[1] : plural(Number(num), f);
+    return pre + w;
   }
   // как читать букву-переменную
-  const LETTER = { a: 'а', b: 'бэ', c: 'цэ', d: 'дэ', k: 'ка', m: 'эм', n: 'эн', p: 'пэ', s: 'эс', t: 'тэ', v: 'вэ', x: 'икс', y: 'игрек', z: 'зэт' };
+  const LETTER = { a: 'а', b: 'бэ', c: 'цэ', d: 'дэ', e: 'е', f: 'эф', g: 'жэ', h: 'аш', i: 'и', k: 'ка', l: 'эль', m: 'эм', n: 'эн', o: 'о', p: 'пэ', q: 'ку', r: 'эр', s: 'эс', t: 'тэ', u: 'у', v: 'вэ', w: 'дубль вэ', x: 'икс', y: 'игрек', z: 'зэт' };
 
   /* ---------- рисунки (SVG; цвета задаются классами в CSS) ---------- */
   function cls(i, k, k2) { return i < k ? 'sa' : i < k + k2 ? 'sb' : 'se'; }

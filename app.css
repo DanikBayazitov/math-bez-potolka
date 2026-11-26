@@ -426,3 +426,21 @@ i.v { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-w
 .errs li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 12px; border-radius: 10px; background: #FDF1EC; }
 .errs li .n { font-weight: 800; color: #C2410C; white-space: nowrap; }
 .tries { margin: 6px 0 0; padding-left: 18px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
+.ans-row .unit { font: 700 22px var(--font-body); color: var(--muted); }
+/* физика: заряды, силовые линии, конденсатор */
+.phys .pb-pos { fill: #FDE2D6; stroke: #E4572E; stroke-width: 2.5; }
+.phys .pb-neg { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2.5; }
+.phys .pb-0 { fill: #F3F7FA; stroke: #93A5B3; stroke-width: 2.5; }
+.phys .ph-sign { font: 800 22px var(--font-body); fill: var(--ink); }
+.phys .ph-sign.sm { font-size: 18px; }
+.phys .ph-lbl { font: 700 14px var(--font-body); fill: var(--ink); }
+.phys .ph-ln { stroke: var(--accent-ink); stroke-width: 2; fill: none; }
+.phys .ph-ln-h { fill: var(--accent-ink); }
+.phys .ph-force { stroke: #E4572E; stroke-width: 3; }
+.phys .ph-force-h { fill: #E4572E; }
+.phys .ph-rod { fill: #E8EEF3; stroke: #5B7083; stroke-width: 2; }
+.phys .ph-cloth { fill: #F6EBD9; stroke: #B08D57; stroke-width: 2; }
+.phys .ph-plate { fill: #DCE6EE; stroke: #5B7083; stroke-width: 2; }
+.phys .ph-diel { fill: #FFF3C4; }
+.phys .ph-wire { stroke: #5B7083; stroke-width: 3; }
+.phys .ph-pt { fill: #E4572E; }
