@@ -72,10 +72,10 @@
       return m;
     });
     // буква-переменная курсивом: строчные (a, q, r) и одна заглавная (F, E, U); внутри тегов не трогаем
-    if (!/[A-Za-zφ]/.test(text)) return html;
+    if (!/[A-Za-zφμ]/.test(text)) return html;
     return html.split(/(<[^>]*>)/).map(function (part) {
       return part.charAt(0) === '<' ? part : part.replace(/(^|[^A-Za-z&])([a-z]{1,3})(?![A-Za-z;])/g, '$1<i class="v">$2</i>')
-        .replace(/(^|[^A-Za-z&>])([A-Z])(?![A-Za-z;<])/g, '$1<i class="v">$2</i>').replace(/φ/g, '<i class="v">φ</i>');
+        .replace(/(^|[^A-Za-z&>])([A-Z])(?![A-Za-z;<])/g, '$1<i class="v">$2</i>').replace(/([φμ])/g, '<i class="v">$1</i>');
     }).join('');
   }
 
@@ -157,22 +157,34 @@
       .replace(/(\d+),(\d*)\((\d+)\)/g, function (m, w, pre, per) { return w + ' целых ' + (pre ? pre + ' и ' : '') + per + ' в периоде'; })
       .replace(/\|([^|]+)\|/g, ' модуль $1 ')
       .replace(/10([⁻]?)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/g, function (m, mi, d) { return '10 в степени ' + (mi ? 'минус ' : '') + d.split('').map(function (c) { return '⁰¹²³⁴⁵⁶⁷⁸⁹'.indexOf(c); }).join(''); })
-      .replace(/Н·м²\/Кл²/g, 'ньютон метр в квадрате на кулон в квадрате')
-      .replace(/(\d+(?:,\d+)?) ?(кН|Н|Дж)\/(Кл|кг)/g, function (m, d, u, per, off, str) { return d + ' ' + unitWord(u, d, str.slice(0, off)) + ' на ' + (per === 'Кл' ? 'кулон' : 'килограмм'); })
-      .replace(/кН\/Кл/g, 'килоньютон на кулон').replace(/Н\/Кл/g, 'ньютон на кулон').replace(/Дж\/Кл/g, 'джоуль на кулон').replace(/Н\/кг/g, 'ньютон на килограмм')
-      .replace(/²/g, ' в квадрате').replace(/³/g, ' в кубе').replace(/₁/g, ' один').replace(/₂/g, ' два').replace(/φ/g, 'фи ')
-      .replace(/(\d+(?:,\d+)?) ?(мкКл|нКл|Кл|мкН|мН|кН|Н|мкДж|Дж|мкФ|нФ|пФ|Ф|кВ|В|см|м|мг|кг)(?![А-Яа-яЁё])/g, function (m, d, u, off, str) {
+      .replace(/Н·м²\/Кл²/g, 'ньютон метр в квадрате на кулон в квадрате').replace(/Н·м²\/кг²/g, 'ньютон метр в квадрате на килограмм в квадрате')
+      .replace(/(\d+(?:,\d+)?) ?(кН|Н|Дж)\/(Кл|кг|м)(?![А-Яа-яЁё])/g, function (m, d, u, per, off, str) { return d + ' ' + unitWord(u, d, str.slice(0, off)) + ' на ' + { 'Кл': 'кулон', 'кг': 'килограмм', 'м': 'метр' }[per]; })
+      .replace(/(\d+(?:,\d+)?) ?(км|м)\/с(²?)/g, function (m, d, u, sq, off, str) { return d + ' ' + unitWord(u, d, str.slice(0, off)) + ' в секунду' + (sq ? ' в квадрате' : ''); })
+      .replace(/кН\/Кл/g, 'килоньютон на кулон').replace(/Н\/Кл/g, 'ньютон на кулон').replace(/Дж\/Кл/g, 'джоуль на кулон').replace(/Н\/кг/g, 'ньютон на килограмм').replace(/Н\/м(?![А-Яа-яЁё])/g, 'ньютон на метр')
+      .replace(/км\/с/g, 'километр в секунду').replace(/м\/с²/g, 'метр в секунду в квадрате').replace(/м\/с/g, 'метр в секунду')
+      .replace(/Fтр/g, 'сила трения').replace(/Fупр/g, 'сила упругости')
+      .replace(/²/g, ' в квадрате').replace(/³/g, ' в кубе').replace(/₀/g, ' ноль').replace(/₁/g, ' один').replace(/₂/g, ' два').replace(/φ/g, 'фи ')
+      .replace(/Δ/g, 'дельта ').replace(/μ/g, 'мю').replace(/√/g, 'корень из ').replace(/π/g, 'пи')
+      .replace(/(\d+(?:,\d+)?) ?(мкКл|нКл|Кл|мкН|мН|кН|Н|мкДж|Дж|мкФ|нФ|пФ|Ф|кВ|В|км|см|мг|кг|мин|м|г|т|ч)(?![А-Яа-яЁё])/g, function (m, d, u, off, str) {
+        if (u === 'г' && /^(19|20)\d\d$/.test(d)) return m;
         return d + ' ' + unitWord(u, d, str.slice(0, off));
+      })
+      .replace(/(\d+(?:,\d+)?) ?с(?=[.,;:)?!\s]|$)/g, function (m, d, off, str) {
+        // «с» после числа - секунды в конце фразы и после «за», «через»; иначе это предлог
+        const before = str.slice(0, off);
+        if (/\s/.test(str.charAt(off + m.length)) && !/(^|\s)(за|через|За|Через)\s$/.test(before)) return m;
+        return d + ' ' + unitWord('с', d, before);
       })
       .replace(/\((мкКл|нКл|Кл|Н|Дж|Ф)\)/g, function (m, u) { return '(' + unitWord(u, '1') + ')'; })
       .replace(/−(?=[\d(a-z])/g, 'минус ')
       .replace(/ - /g, ', ')
       .replace(/(^|[^A-Za-z])([a-z]{1,3})(?![A-Za-z])/g, function (m, p, w) { return p + ' ' + w.split('').map(function (l) { return LETTER[l] || l; }).join(' ') + ' '; })
-      .replace(/(^|[^A-Za-z])([ABCDEFKMNOPQRSTUW])(?![A-Za-z])/g, function (m, p, l) { return p + ' ' + LETTER[l.toLowerCase()] + ' '; });
+      .replace(/(^|[^A-Za-z])([ABCDEFGKMNOPQRSTUW])(?![A-Za-z])/g, function (m, p, l) { return p + ' ' + (l === 'G' ? 'гэ' : LETTER[l.toLowerCase()]) + ' '; });
   }
   // единицы физики: 1 кулон, 2 кулона, 5 кулонов, 0,5 кулона
   const UNIT = { 'Кл': ['кулон', 'кулона', 'кулонов'], 'Н': ['ньютон', 'ньютона', 'ньютонов'], 'Дж': ['джоуль', 'джоуля', 'джоулей'], 'Ф': ['фарад', 'фарада', 'фарад'],
-    'В': ['вольт', 'вольта', 'вольт'], 'м': ['метр', 'метра', 'метров'], 'г': ['грамм', 'грамма', 'граммов'] };
+    'В': ['вольт', 'вольта', 'вольт'], 'м': ['метр', 'метра', 'метров'], 'г': ['грамм', 'грамма', 'граммов'], 'т': ['тонна', 'тонны', 'тонн'],
+    'с': ['секунда', 'секунды', 'секунд'], 'мин': ['минута', 'минуты', 'минут'], 'ч': ['час', 'часа', 'часов'] };
   const PREF = { 'мк': 'микро', 'н': 'нано', 'п': 'пико', 'м': 'милли', 'к': 'кило', 'с': 'санти' };
   // before - текст перед числом: после «10 в степени ...» и после десятичной дроби единица в родительном падеже
   function unitWord(u, num, before) {

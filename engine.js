@@ -1005,7 +1005,7 @@
     try { const q = M.makeQuestion(topicId, step, lctx(data), gi, seed); return q.prompt; } catch (e) { return ''; }
   };
   E.dayTasks = function (data, date) {
-    return (data.log || []).filter(function (r) { return dkey(r[0] * 1000) === date && 'dlcnrgbexpz'.indexOf(r[3]) >= 0; }).map(function (r) {
+    return (data.log || []).filter(function (r) { return dkey(r[0] * 1000) === date && 'dlcnrgbexpztf'.indexOf(r[3]) >= 0; }).map(function (r) {
       return { time: r[0] * 1000, topic: r[1], step: r[2], mode: MODE[r[3]], res: RES[r[4]], code: r[4], sec: r[7],
         text: E.taskText(data, r[1], r[2], r[8], r[9]) };
     });

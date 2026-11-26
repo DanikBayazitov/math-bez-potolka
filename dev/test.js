@@ -10,7 +10,7 @@ require(path.join(APP, 'content.js'));
 require(path.join(APP, 'content2.js'));
 require(path.join(APP, 'content3.js'));
 require(path.join(APP, 'content6a.js'));
-['content6b.js', 'content6c.js', 'content6d.js', 'content_p8.js'].forEach(function (f) { if (require('fs').existsSync(path.join(APP, f))) require(path.join(APP, f)); });
+['content6b.js', 'content6c.js', 'content6d.js', 'content_p8.js', 'content_p9.js'].forEach(function (f) { if (require('fs').existsSync(path.join(APP, f))) require(path.join(APP, f)); });
 require(path.join(APP, 'grades.js'));
 require(path.join(APP, 'engine.js'));
 const M = globalThis.M, E = M.E;
@@ -365,6 +365,31 @@ ok(Object.values(wst.topics).some(s => s.status !== 'new'), 'weak progresses');
   ok(log[0] && log[0].indexOf('e-potential') === 0, 'physics diag starts from the KTP topic of the date');
   ok(dd && dd.type === 'diag-done' && dd.topic === 'e-field' && !dd.test, 'physics diag ends at e-field without a test: ' + JSON.stringify(dd));
   ok(E.currentTopic(st) === 'e-field', 'physics current topic e-field, got ' + E.currentTopic(st));
+  // 9 класс: глава «Основы динамики»
+  const p9 = M.topicsOf(9, 'phys');
+  ok(p9.length === 8 && p9.every(t => t.subj === 'phys' && t.grade === 9), 'physics 9: 8 topics');
+  ok(M.chaptersOf(9, 'phys').length === 1 && M.chaptersOf(9, 'phys')[0].id === '9.2.2' && M.chaptersOf(9, 'phys')[0].topics.length === 8, 'physics 9: one chapter');
+  const s9 = sim({ subj: 'phys', grade: 9, max: 3000, perDay: 60, answer: () => 2 });
+  ok(s9.done && Object.keys(s9.st.topics).every(id => M.topicById(id).grade === 9 && M.topicById(id).subj === 'phys'), 'physics 9 strong finishes inside grade 9, steps=' + s9.steps);
+  ok(s9.st.ch['9.2.2'] && s9.st.ch['9.2.2'].pass, 'physics 9 chapter test passed');
+  const c9 = E.course(s9.st);
+  ok(c9.total === 68 && c9.pct === 21, 'physics 9 course percent 14 of 68 lessons: ' + JSON.stringify(c9));
+  console.log('phys9 strong:', s9.steps, 'steps', JSON.stringify(s9.seen));
+  const ab9 = {};
+  const l9 = sim({ subj: 'phys', grade: 9, max: 7000, perDay: 45, simpler: 0.03, deep: 0.2, prac: 0.2, answer: function (card) {
+    const t = card.topic; ab9[t] = ab9[t] === undefined ? -1.2 : ab9[t] + 0.12;
+    const b = card.step === 6 ? 3 : E._.DIFF[card.step - 1];
+    const p = 1 / (1 + Math.exp(b - ab9[t])), x = Math.random();
+    return x < p ? 2 : x < p + (1 - p) * 0.6 ? 1 : 0;
+  } });
+  const closed9 = p9.filter(t => l9.st.topics[t.id] && ['closed', 'today'].indexOf(l9.st.topics[t.id].status) >= 0).length;
+  console.log('phys9 learner:', l9.steps, 'steps, done=' + l9.done, 'closed', closed9);
+  ok(l9.done || closed9 >= 4, 'physics 9 learner progresses');
+  // разведка 26 ноября начинается с «Третьего закона Ньютона»
+  const st9 = E.newState('phys'), now9 = new Date(2026, 10, 26, 16, 0, 0).getTime();
+  E.onboard(st9, { nick: 'Д', grade: 9, g: 'f', interests: [], subj: 'phys' }, now9);
+  const c0 = E.next(st9, now9);
+  ok(c0.type === 'task' && c0.topic === 'd-newton3', 'physics 9 diag starts from the KTP topic of the date: ' + c0.topic);
   // математика и физика хранятся отдельно
   ok(E._.keyOf ? E._.keyOf('phys') !== E._.keyOf('math') : true, 'separate storage keys');
 })();

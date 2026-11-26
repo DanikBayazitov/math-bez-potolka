@@ -144,5 +144,86 @@
     return svg(320, 186, aria || 'Плоский конденсатор', b);
   }
 
-  M.P = { sup: sup, sci: sci, num: num, svgCharges: svgCharges, svgInduction: svgInduction, svgRub: svgRub, svgLines: svgLines, svgForce: svgForce, svgCapacitor: svgCapacitor };
+  /* ---------- механика ---------- */
+  // брусок и силы из центра: forces [{ d: 'up'|'down'|'left'|'right', l: 'mg', n: 1..3 }]
+  // opt.ground: опора снизу; opt.a: направление ускорения (пунктирная стрелка сбоку)
+  function svgBox(forces, aria, opt) {
+    opt = opt || {};
+    const cx = 160, cy = 100, w = 64, h = 44;
+    let b = '';
+    if (opt.ground) {
+      b += '<line class="ph-ground" x1="40" y1="' + (cy + h / 2) + '" x2="280" y2="' + (cy + h / 2) + '"/>';
+      for (let x = 48; x < 280; x += 14) b += '<line class="ph-hatch" x1="' + x + '" y1="' + (cy + h / 2) + '" x2="' + (x - 8) + '" y2="' + (cy + h / 2 + 8) + '"/>';
+    }
+    b += '<rect class="ph-box" x="' + (cx - w / 2) + '" y="' + (cy - h / 2) + '" width="' + w + '" height="' + h + '" rx="4"/>';
+    const D = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+    forces.forEach(function (f) {
+      const v = D[f.d], L = (v[0] ? 40 : 30) + 16 * (f.n || 2), x2 = cx + v[0] * L, y2 = cy + v[1] * L;
+      b += arrow(cx, cy, x2, y2, 'ph-force');
+      const lx = v[0] > 0 ? x2 + 6 : v[0] < 0 ? x2 - 6 : cx + 8, ly = v[1] > 0 ? y2 - 2 : v[1] < 0 ? y2 + 12 : cy - 8;
+      b += '<text class="ph-lbl" x="' + lx + '" y="' + ly + '" text-anchor="' + (v[0] < 0 ? 'end' : 'start') + '">' + M.esc(f.l) + '</text>';
+    });
+    if (opt.a) {
+      const v = D[opt.a];
+      const x1 = v[0] ? cx - 30 * v[0] : cx + 86, y1 = v[1] ? cy - 30 * v[1] : cy - 62;
+      b += arrow(x1, y1, x1 + 60 * v[0], y1 + 60 * v[1], 'ph-acc');
+      b += '<text class="ph-lbl" x="' + (x1 + 30 * v[0] + (v[0] ? 0 : 10)) + '" y="' + (y1 + 30 * v[1] + (v[0] ? -8 : 4)) + '">a</text>';
+    }
+    return svg(320, 200, aria || 'Силы, действующие на брусок', b);
+  }
+  function zigzag(x, y1, y2, n) {
+    const st = (y2 - y1) / (2 * n);
+    let d = 'M' + x + ' ' + y1;
+    for (let i = 0; i < 2 * n; i++) d += ' L' + (x + (i % 2 ? -9 : 9)) + ' ' + (y1 + st * (i + 0.5)).toFixed(1);
+    return '<path class="ph-spring" d="' + d + ' L' + x + ' ' + y2 + '"/>';
+  }
+  // пружина без груза и с грузом, Δl - удлинение
+  function svgSpring(aria) {
+    let b = '<line class="ph-ground" x1="60" y1="16" x2="260" y2="16"/>';
+    for (let x = 68; x < 260; x += 14) b += '<line class="ph-hatch" x1="' + x + '" y1="16" x2="' + (x - 8) + '" y2="8"/>';
+    b += zigzag(110, 16, 90, 6) + '<line class="ph-dim" x1="90" y1="90" x2="250" y2="90"/>';
+    b += zigzag(210, 16, 130, 6) + '<rect class="ph-box" x="188" y="130" width="44" height="34" rx="4"/>';
+    b += '<line class="ph-dim" x1="196" y1="130" x2="250" y2="130"/><line class="ph-dim" x1="244" y1="90" x2="244" y2="130"/>';
+    b += '<text class="ph-lbl" x="250" y="115">Δl</text><text class="ph-lbl" x="110" y="112" text-anchor="middle">без груза</text><text class="ph-lbl" x="210" y="186" text-anchor="middle">с грузом</text>';
+    return svg(320, 196, aria || 'Пружина без груза и с грузом', b);
+  }
+  // два тела притягиваются: стрелки друг к другу и расстояние r
+  function svgMasses(aria) {
+    let b = ball(90, 70, 24, '', 'm₁') + ball(230, 70, 18, '', 'm₂');
+    b += arrow(116, 70, 152, 70, 'ph-force') + arrow(210, 70, 174, 70, 'ph-force');
+    b += '<line class="ph-dim" x1="90" y1="126" x2="230" y2="126"/><line class="ph-dim" x1="90" y1="118" x2="90" y2="134"/><line class="ph-dim" x1="230" y1="118" x2="230" y2="134"/>';
+    b += '<text class="ph-lbl" x="160" y="146" text-anchor="middle">r</text>';
+    return svg(320, 156, aria || 'Два тела притягиваются', b);
+  }
+  // два тела толкают друг друга: силы равны и направлены в разные стороны
+  function svgPair(aria) {
+    let b = '<rect class="ph-box" x="86" y="56" width="74" height="50" rx="4"/><rect class="ph-box" x="160" y="56" width="74" height="50" rx="4"/>';
+    b += '<text class="ph-lbl" x="123" y="88" text-anchor="middle">1</text><text class="ph-lbl" x="197" y="88" text-anchor="middle">2</text>';
+    b += arrow(123, 40, 63, 40, 'ph-force') + arrow(197, 40, 257, 40, 'ph-force');
+    b += '<text class="ph-lbl" x="58" y="32" text-anchor="end">F₁</text><text class="ph-lbl" x="262" y="32">F₂</text>';
+    return svg(320, 120, aria || 'Тела действуют друг на друга', b);
+  }
+  // спутник на круговой орбите
+  function svgOrbit(aria) {
+    let b = '<circle class="ph-orbit" cx="160" cy="110" r="84"/><circle class="ph-earth" cx="160" cy="110" r="40"/>';
+    b += '<text class="ph-lbl" x="160" y="115" text-anchor="middle">Земля</text>';
+    b += '<circle class="ph-sat" cx="160" cy="26" r="8"/>';
+    b += arrow(168, 26, 236, 26, 'ph-force') + '<text class="ph-lbl" x="240" y="31">v</text>';
+    b += arrow(160, 36, 160, 66, 'ph-ln') + '<text class="ph-lbl" x="168" y="60">F</text>';
+    return svg(320, 206, aria || 'Спутник на орбите', b);
+  }
+  // бросок горизонтально с высоты h, дальность s
+  function svgThrow(aria) {
+    let b = '<rect class="ph-cliff" x="20" y="40" width="40" height="130"/><line class="ph-ground" x1="20" y1="170" x2="300" y2="170"/>';
+    let d = 'M60 40';
+    for (let i = 1; i <= 20; i++) { const t = i / 20; d += ' L' + (60 + 200 * t).toFixed(1) + ' ' + (40 + 130 * t * t).toFixed(1); }
+    b += '<path class="ph-path" d="' + d + '"/><circle class="ph-sat" cx="60" cy="40" r="6"/>';
+    b += arrow(66, 40, 116, 40, 'ph-force') + '<text class="ph-lbl" x="96" y="32">v₀</text>';
+    b += '<text class="ph-lbl" x="12" y="110" text-anchor="end">h</text><line class="ph-dim" x1="14" y1="40" x2="14" y2="170"/>';
+    b += '<line class="ph-dim" x1="60" y1="184" x2="260" y2="184"/><text class="ph-lbl" x="160" y="198" text-anchor="middle">s</text>';
+    return svg(320, 204, aria || 'Бросок горизонтально', b);
+  }
+
+  M.P = { sup: sup, sci: sci, num: num, svgCharges: svgCharges, svgInduction: svgInduction, svgRub: svgRub, svgLines: svgLines, svgForce: svgForce, svgCapacitor: svgCapacitor,
+    svgBox: svgBox, svgSpring: svgSpring, svgMasses: svgMasses, svgPair: svgPair, svgOrbit: svgOrbit, svgThrow: svgThrow };
 })();

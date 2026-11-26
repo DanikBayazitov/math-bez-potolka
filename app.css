@@ -444,3 +444,15 @@ i.v { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-w
 .phys .ph-diel { fill: #FFF3C4; }
 .phys .ph-wire { stroke: #5B7083; stroke-width: 3; }
 .phys .ph-pt { fill: #E4572E; }
+.phys .ph-box { fill: #F6EBD9; stroke: #B08D57; stroke-width: 2; }
+.phys .ph-ground { stroke: #5B7083; stroke-width: 2.5; }
+.phys .ph-hatch { stroke: #93A5B3; stroke-width: 1.5; }
+.phys .ph-acc { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 6 4; }
+.phys .ph-acc-h { fill: var(--accent); }
+.phys .ph-spring { stroke: #5B7083; stroke-width: 2; fill: none; }
+.phys .ph-dim { stroke: #93A5B3; stroke-width: 1.5; }
+.phys .ph-orbit { fill: none; stroke: #93A5B3; stroke-width: 2; stroke-dasharray: 6 5; }
+.phys .ph-earth { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2.5; }
+.phys .ph-sat { fill: #E4572E; }
+.phys .ph-cliff { fill: #E8EEF3; stroke: #5B7083; stroke-width: 2; }
+.phys .ph-path { fill: none; stroke: var(--accent-ink); stroke-width: 2; stroke-dasharray: 5 4; }
